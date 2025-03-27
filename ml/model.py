@@ -441,9 +441,58 @@ def predict(model, features, model_type):
         
         # 提取原始文本，用于基于规则的判断
         text_str = ""
-        if isinstance(features, list) and len(features) > 0:
-            text_str = str(features).lower()
+        original_text = ""
         
+        # 获取原始文本
+        if isinstance(features, str):
+            # 如果输入就是字符串，直接使用
+            original_text = features
+            text_str = features.lower()
+            logging.info(f"输入是直接的文本字符串: {text_str[:30]}...")
+        elif isinstance(features, list) and len(features) > 0:
+            if isinstance(features[0], str):
+                # 如果是文本列表，使用第一个文本
+                original_text = features[0]
+                text_str = features[0].lower()
+                logging.info(f"输入是文本列表，使用第一个: {text_str[:30]}...")
+            else:
+                # 是向量特征，尝试从请求参数中获取原始文本
+                text_str = str(features).lower()
+                logging.info(f"输入是向量特征: {text_str[:30]}...")
+                
+        # 强制规则检测 (优先级最高)：检查明显的垃圾短信标志
+        critical_spam_patterns = [
+            r'http[s]?://', # 包含http或https链接
+            r'www\.[a-zA-Z0-9-]+\.[a-zA-Z]{2,}', # 网址模式
+            r'wap\.', # WAP链接
+            r'\.com', # .com域名
+            r'\.cn', # .cn域名
+            r'\.net', # .net域名
+            r'click.*link', # 点击链接
+            r'click.*here', # 点击这里
+            r'credit', # 信用卡
+            r'点击.*链接', # 中文点击链接
+            r'点此.*进入', # 中文点此进入
+            r'链接.*访问', # 中文链接访问
+        ]
+        
+        # 强制规则匹配检查
+        forced_spam = False
+        matched_pattern = None
+        
+        for pattern in critical_spam_patterns:
+            if re.search(pattern, text_str):
+                forced_spam = True
+                matched_pattern = pattern
+                break
+                
+        if forced_spam:
+            logging.warning(f"强制规则触发: 匹配到关键垃圾短信模式 '{matched_pattern}'")
+            logging.warning(f"文本内容: {text_str[:50]}...")
+            # 直接返回垃圾短信的判断结果和高置信度
+            return 1, 0.98
+        
+        # 没有触发强制规则，继续常规处理逻辑...
         # 垃圾短信关键词检测 - 增加英文关键词
         spam_keywords = [
             # 中文垃圾关键词
@@ -665,43 +714,7 @@ def predict(model, features, model_type):
             logging.warning(f"模型 {model_type} 不可用或PyTorch不可用，使用规则和随机预测")
             model_spam_score = np.random.uniform(0.3, 0.7)
         
-        # 增强的垃圾短信检测逻辑 - 识别明显的垃圾短信模式
-        # 首先检查明显的垃圾短信特征，这比模型预测结果优先级更高
-        
-        # 强制规则：这些模式出现任何一个，直接判定为垃圾短信
-        critical_spam_patterns = [
-            r'http[s]?://', # 包含http或https链接
-            r'www\.[a-zA-Z0-9-]+\.[a-zA-Z]{2,}', # 网址模式
-            r'wap\.', # WAP链接
-            r'click.*link', # 点击链接
-            r'click.*here', # 点击这里
-            r'credit', # 信用卡
-            r'\.com', # .com域名
-            r'\.cn', # .cn域名
-            r'\.net', # .net域名
-            r'点击.*链接', # 中文点击链接
-            r'点此.*进入', # 中文点此进入
-            r'链接.*访问', # 中文链接访问
-        ]
-        
-        # 检查关键强制规则 - 只要匹配一条就判定为垃圾
-        forced_spam = False
-        for pattern in critical_spam_patterns:
-            if re.search(pattern, text_str.lower()):
-                forced_spam = True
-                logging.warning(f"强制规则触发: 匹配到关键垃圾短信模式 '{pattern}'")
-                final_spam_score = 0.98  # 几乎100%确定
-                prediction = 1  # 强制设为垃圾短信
-                confidence = final_spam_score
-                logging.warning(f"关键垃圾短信模式匹配，强制设置垃圾短信评分为 {final_spam_score:.2f}")
-                
-                # 记录预测详情后直接返回，跳过后续计算
-                logging.debug(f"短信预测(强制规则): 文本={text_str[:30]}..., " +
-                         f"规则分={rule_spam_score:.2f}, 模型分={model_spam_score:.2f}, " +
-                         f"最终分={final_spam_score:.2f}, 预测={prediction}, 置信度={confidence:.2f}")
-                return prediction, confidence
-        
-        # 如果没有触发强制规则，继续正常评分流程
+        # 如果前面的强制规则没有触发，则继续常规评分流程
         # 根据模型类型调整规则和模型权重
         if model_type in ['naive_bayes', 'svm']:
             # 传统机器学习模型：50%模型 + 50%规则

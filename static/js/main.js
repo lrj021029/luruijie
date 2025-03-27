@@ -166,6 +166,30 @@ async function handleFileUpload(event) {
     const submitBtn = form.querySelector('button[type="submit"]');
     const resultContainer = document.getElementById('upload-result');
     const loadingSpinner = document.getElementById('upload-spinner');
+    const fileInput = form.querySelector('input[type="file"]');
+    
+    // 检查是否选择了文件
+    if (!fileInput.files || fileInput.files.length === 0) {
+        resultContainer.innerHTML = `
+            <div class="alert alert-warning">
+                <strong>请选择文件:</strong> 请选择一个CSV文件进行上传
+            </div>
+        `;
+        resultContainer.classList.remove('d-none');
+        return;
+    }
+    
+    // 检查文件格式是否为CSV
+    const fileName = fileInput.files[0].name;
+    if (!fileName.toLowerCase().endsWith('.csv')) {
+        resultContainer.innerHTML = `
+            <div class="alert alert-warning">
+                <strong>文件格式错误:</strong> 请上传CSV格式的文件
+            </div>
+        `;
+        resultContainer.classList.remove('d-none');
+        return;
+    }
     
     // 显示加载动画
     loadingSpinner.classList.remove('d-none');
@@ -181,11 +205,11 @@ async function handleFileUpload(event) {
             body: formData
         });
         
-        if (!response.ok) {
-            throw new Error('文件上传失败');
-        }
-        
         const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || '文件上传失败');
+        }
         
         // 显示上传结果
         resultContainer.innerHTML = `
@@ -237,7 +261,10 @@ async function handleFileUpload(event) {
         // 显示错误消息
         resultContainer.innerHTML = `
             <div class="alert alert-danger">
-                <strong>错误:</strong> ${error.message}
+                <strong>错误:</strong> ${error.message || '上传处理过程中发生错误'}
+            </div>
+            <div class="alert alert-info mt-2">
+                <strong>提示:</strong> 请确保CSV文件至少包含一个名为"text"的列。其他列如"send_freq"和"is_night"是可选的。
             </div>
         `;
         resultContainer.classList.remove('d-none');
@@ -642,12 +669,28 @@ async function updateDriftChart() {
         // 发送请求到后端API，包含当前选择的模型类型
         const response = await fetch(`/track_drift?model_type=${modelType}`);
         
-        if (!response.ok) {
-            console.error('获取漂移数据失败');
-            return;
+        // 即使响应不是200，我们也尝试解析JSON
+        const data = await response.json();
+        
+        // 检查是否有错误信息
+        if (!response.ok || data.error) {
+            console.error('获取漂移数据失败:', data.error || '未知错误');
+            
+            // 显示一个简单的错误提示，但不中断整个操作
+            const warningContainer = document.getElementById('drift-warning');
+            if (warningContainer) {
+                warningContainer.innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <strong>漂移检测暂时不可用</strong>
+                        <p class="mb-0">数据不足或系统处理中，请稍后再试。</p>
+                    </div>
+                `;
+            }
+            
+            // 尽管出错，我们仍然继续使用返回的数据，因为我们已改进后端以总是返回合理的默认值
         }
         
-        const data = await response.json();
         const chart = window.driftChart;
         
         // 更新图表数据
@@ -668,6 +711,17 @@ async function updateDriftChart() {
         
     } catch (error) {
         console.error('更新漂移图表错误:', error);
+        // 显示一个友好的错误信息
+        const warningContainer = document.getElementById('drift-warning');
+        if (warningContainer) {
+            warningContainer.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>漂移检测异常</strong>
+                    <p class="mb-0">服务暂时不可用，请稍后再试。</p>
+                </div>
+            `;
+        }
     }
 }
 

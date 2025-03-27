@@ -86,7 +86,49 @@
                     <div class="mb-3">
                         <label for="file" class="form-label">上传CSV文件</label>
                         <input type="file" class="form-control" id="file" name="file" accept=".csv" required>
-                        <div class="form-text">CSV文件必须包含以下列: text, send_freq, is_night</div>
+                        <div class="form-text">CSV文件可以包含任意列，上传后可以选择对应的列</div>
+                    </div>
+                    
+                    <!-- 列映射区域 - 初始隐藏 -->
+                    <div id="column-mapping" style="display: none;">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>请选择CSV文件中对应的列
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="text_column" class="form-label">文本列 <span class="text-danger">*</span></label>
+                            <select class="form-select" id="text_column" name="text_column" required>
+                                <option value="">-- 请选择 --</option>
+                            </select>
+                            <div class="form-text">包含短信文本内容的列</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="label_column" class="form-label">标签列 (可选)</label>
+                            <select class="form-select" id="label_column" name="label_column">
+                                <option value="">-- 无 --</option>
+                            </select>
+                            <div class="form-text">包含标签(垃圾/非垃圾)的列</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="send_freq_column" class="form-label">发送频率列 (可选)</label>
+                            <select class="form-select" id="send_freq_column" name="send_freq_column">
+                                <option value="">-- 无 --</option>
+                            </select>
+                            <div class="form-text">包含发送频率的列</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="is_night_column" class="form-label">夜间发送列 (可选)</label>
+                            <select class="form-select" id="is_night_column" name="is_night_column">
+                                <option value="">-- 无 --</option>
+                            </select>
+                            <div class="form-text">包含是否夜间发送的列</div>
+                        </div>
+                        
+                        <input type="hidden" name="mapping_mode" id="mapping_mode" value="false">
+                        <input type="hidden" name="filename" id="csv_filename" value="">
                     </div>
                     
                     <div class="mb-3">

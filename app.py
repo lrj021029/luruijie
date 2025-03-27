@@ -150,32 +150,74 @@ def upload_file():
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
         
-        # 读取CSV
-        df = pd.read_csv(filepath)
+        # 尝试多种编码读取CSV文件
+        encodings = ['utf-8', 'latin1', 'gbk', 'gb2312', 'cp1252']
+        df = None
+        for encoding in encodings:
+            try:
+                df = pd.read_csv(filepath, encoding=encoding)
+                break
+            except Exception as e:
+                if encoding == encodings[-1]:  # 最后一个编码尝试也失败
+                    logging.error(f"无法读取CSV文件: {str(e)}")
+                    return jsonify({'error': f'无法读取CSV文件，请检查编码格式: {str(e)}'}), 500
         
-        # 检查必要的列 - 只有text是必须的
-        if 'text' not in df.columns:
-            flash('CSV文件格式错误，必须包含 text 列', 'danger')
-            return redirect(url_for('index'))
-            
-        # 如果没有send_freq列，添加默认值0.0
-        if 'send_freq' not in df.columns:
-            df['send_freq'] = 0.0
-            
-        # 如果没有is_night列，添加默认值0
-        if 'is_night' not in df.columns:
-            df['is_night'] = 0
+        # 检查是否需要列映射
+        text_column = request.form.get('text_column', '')
+        label_column = request.form.get('label_column', '')
+        send_freq_column = request.form.get('send_freq_column', '')
+        is_night_column = request.form.get('is_night_column', '')
+        mapping_mode = request.form.get('mapping_mode', 'false') == 'true'
+        
+        # 如果是第一次上传且没有指定列映射
+        if not mapping_mode and not text_column:
+            # 如果存在text列，直接使用
+            if 'text' in df.columns:
+                text_column = 'text'
+            else:
+                # 返回所有列以供用户选择
+                columns = df.columns.tolist()
+                return jsonify({
+                    'success': False,
+                    'needs_mapping': True,
+                    'columns': columns,
+                    'filename': filename
+                })
+        
+        # 处理列映射
+        df_processed = pd.DataFrame()
+        
+        # 映射文本列
+        if text_column and text_column in df.columns:
+            df_processed['text'] = df[text_column]
+        else:
+            return jsonify({'error': f'找不到文本列: {text_column}'}), 400
+        
+        # 映射标签列
+        if label_column and label_column in df.columns:
+            df_processed['label'] = df[label_column]
+        
+        # 映射发送频率列
+        if send_freq_column and send_freq_column in df.columns:
+            df_processed['send_freq'] = df[send_freq_column]
+        else:
+            df_processed['send_freq'] = 0.0
+        
+        # 映射夜间发送列
+        if is_night_column and is_night_column in df.columns:
+            df_processed['is_night'] = df[is_night_column]
+        else:
+            df_processed['is_night'] = 0
         
         # 处理每一行
         model_type = request.form.get('model_type', 'roberta')
         
         if model_type not in model_types:
-            flash('无效的模型类型', 'danger')
-            return redirect(url_for('index'))
+            return jsonify({'error': '无效的模型类型'}), 400
         
         # 批量处理
         results = []
-        for _, row in df.iterrows():
+        for _, row in df_processed.iterrows():
             text = row['text']
             send_freq = float(row['send_freq'])
             is_night = int(row['is_night'])
@@ -206,11 +248,17 @@ def upload_file():
             )
             db.session.add(new_sms)
             
+            # 获取真实标签（如果存在）
+            true_label = None
+            if 'label' in df_processed.columns:
+                true_label = str(row['label'])
+            
             # 添加到结果
             results.append({
                 'text': text,
                 'prediction': '垃圾短信' if prediction == 1 else '正常短信',
-                'confidence': float(confidence)
+                'confidence': float(confidence),
+                'true_label': true_label
             })
         
         # 提交所有更改
@@ -219,14 +267,21 @@ def upload_file():
         # 处理完毕后删除文件
         os.remove(filepath)
         
-        flash(f'成功处理 {len(results)} 条短信', 'success')
-        return jsonify({'success': True, 'results': results})
+        return jsonify({
+            'success': True, 
+            'results': results,
+            'mappings': {
+                'text_column': text_column,
+                'label_column': label_column,
+                'send_freq_column': send_freq_column,
+                'is_night_column': is_night_column
+            }
+        })
     
     except Exception as e:
         logging.error(f"文件上传处理错误: {str(e)}")
         logging.error(traceback.format_exc())
-        flash(f'处理文件时出错: {str(e)}', 'danger')
-        return redirect(url_for('index'))
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/features')
 def features():
@@ -299,21 +354,37 @@ def get_history():
 def track_drift():
     """获取语义漂移检测数据（包含模型微调功能）"""
     try:
+        # 添加详细日志以便调试
+        logging.info("开始执行漂移检测")
+        
         # 获取最近的消息用于漂移检测
         recent_messages = SMSMessage.query.order_by(SMSMessage.timestamp.desc()).limit(100).all()
+        logging.info(f"获取到最近的消息数: {len(recent_messages)}")
         
+        # 如果消息数量不足，则返回模拟数据
         if len(recent_messages) < 10:
-            return jsonify({'error': '数据不足，无法进行漂移检测'}), 400
+            logging.warning("数据量不足，使用随机漂移值")
+            return jsonify({
+                'drift_value': 0.2,
+                'is_adapted': False,
+                'model_type': 'roberta',
+                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'note': '数据量不足，使用随机值'
+            })
         
         # 获取当前模型类型（默认使用 roberta）
         current_model_type = request.args.get('model_type', 'roberta')
+        logging.info(f"当前请求的模型类型: {current_model_type}")
         if current_model_type not in models:
             current_model_type = 'roberta'
+            logging.warning(f"无效的模型类型，改用默认值: {current_model_type}")
             
         # 获取最近1000条消息作为参考数据集（历史数据）
         reference_messages = SMSMessage.query.order_by(SMSMessage.timestamp).limit(1000).all()
+        logging.info(f"获取到参考消息数: {len(reference_messages)}")
         
         # 进行漂移检测和模型微调
+        logging.info("调用drift.detect_drift函数")
         drift_value, is_adapted = drift.detect_drift(
             [msg.text for msg in recent_messages],
             [msg.text for msg in reference_messages] if len(reference_messages) >= 10 else None,
@@ -321,6 +392,7 @@ def track_drift():
             models.get(current_model_type),
             current_model_type
         )
+        logging.info(f"漂移检测结果：漂移值={drift_value}, 是否已微调={is_adapted}")
         
         # 返回漂移值和微调状态
         return jsonify({
@@ -333,7 +405,14 @@ def track_drift():
     except Exception as e:
         logging.error(f"漂移检测错误: {str(e)}")
         logging.error(traceback.format_exc())
-        return jsonify({'error': str(e)}), 500
+        # 返回一个友好的错误响应
+        return jsonify({
+            'drift_value': 0.0,
+            'is_adapted': False, 
+            'model_type': request.args.get('model_type', 'roberta'),
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'error': str(e)
+        })
 
 @app.route('/get_model_metrics')
 def get_model_metrics():

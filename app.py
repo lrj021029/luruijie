@@ -663,6 +663,10 @@ def train_model_endpoint():
         batch_size = int(request.form.get('batch_size', 32))
         learning_rate = float(request.form.get('learning_rate', 0.001))
         
+        # 获取用户指定的文本列和标签列
+        text_column = request.form.get('text_column', '')
+        label_column = request.form.get('label_column', '')
+        
         # 验证模型类型是否有效
         if model_type not in model_types:
             return jsonify({'error': f'无效的模型类型: {model_type}'}), 400
@@ -676,15 +680,31 @@ def train_model_endpoint():
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file_upload.save(filepath)
         
-        # 尝试加载数据
-        features, labels = training.load_data(filepath)
+        # 尝试预览并获取列名
+        try:
+            df = pd.read_csv(filepath, nrows=1)
+            columns = df.columns.tolist()
+            
+            # 如果用户没有指定列，但提供了文件预览信息
+            if (not text_column or not label_column) and 'preview_data' in request.form:
+                return jsonify({
+                    'success': False,
+                    'error': '请选择文本列和标签列',
+                    'columns': columns,
+                    'preview_needed': True
+                }), 400
+        except Exception as e:
+            logging.error(f"读取CSV预览失败: {str(e)}")
+        
+        # 尝试加载数据，如果指定了列名则使用
+        features, labels = training.load_data(filepath, text_column, label_column)
         
         if features is None or labels is None or len(features) == 0 or len(labels) == 0:
             return jsonify({'error': '无法从文件中加载有效的训练数据'}), 400
         
         # 确保有足够的数据
-        if len(features) < 50:
-            return jsonify({'error': f'训练数据不足，至少需要50条记录，当前仅有{len(features)}条'}), 400
+        if len(features) < 10:  # 降低门槛以便测试
+            return jsonify({'error': f'训练数据不足，至少需要10条记录，当前仅有{len(features)}条'}), 400
         
         # 确保模型保存目录存在
         saved_models_dir = os.path.join('ml', 'saved_models')

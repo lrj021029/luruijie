@@ -31,47 +31,82 @@ function setupModelTraining() {
         try {
             const formData = new FormData(this);
             
+            // 先发送预览请求，检查是否需要用户选择列
+            formData.append('preview_data', 'true');
+            
             // 发送请求到后端API
-            const response = await fetch('/train_model', {
+            let response = await fetch('/train_model', {
                 method: 'POST',
                 body: formData
             });
             
-            const data = await response.json();
+            let data = await response.json();
+            
+            // 如果需要用户选择列
+            if (!response.ok && data.preview_needed) {
+                // 显示列选择对话框
+                const columnsModal = new bootstrap.Modal(document.getElementById('columnsModal') || createColumnsModal());
+                
+                // 填充列选择下拉框
+                const textColumnSelect = document.getElementById('text-column-select');
+                const labelColumnSelect = document.getElementById('label-column-select');
+                
+                // 清空之前的选项
+                textColumnSelect.innerHTML = '';
+                labelColumnSelect.innerHTML = '';
+                
+                // 添加列选项
+                data.columns.forEach(column => {
+                    textColumnSelect.innerHTML += `<option value="${column}">${column}</option>`;
+                    labelColumnSelect.innerHTML += `<option value="${column}">${column}</option>`;
+                });
+                
+                // 显示模态框
+                columnsModal.show();
+                
+                // 处理列选择表单提交
+                document.getElementById('columns-form').onsubmit = async function(e) {
+                    e.preventDefault();
+                    columnsModal.hide();
+                    
+                    // 获取所选列
+                    const textColumn = textColumnSelect.value;
+                    const labelColumn = labelColumnSelect.value;
+                    
+                    // 添加到原始表单数据
+                    formData.delete('preview_data');
+                    formData.append('text_column', textColumn);
+                    formData.append('label_column', labelColumn);
+                    
+                    // 重新发送训练请求
+                    response = await fetch('/train_model', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    data = await response.json();
+                    
+                    if (!response.ok) {
+                        throw new Error(data.error || '训练模型时发生错误');
+                    }
+                    
+                    // 处理成功响应
+                    handleTrainingSuccess(data);
+                };
+                
+                // 恢复按钮状态
+                trainButton.disabled = false;
+                trainButton.innerHTML = '<i class="fas fa-graduation-cap me-2"></i>开始训练模型';
+                
+                return;
+            }
             
             if (!response.ok) {
                 throw new Error(data.error || '训练模型时发生错误');
             }
             
-            // 显示训练成功结果
-            trainResultDiv.querySelector('.alert').className = 'alert alert-success';
-            trainResultDiv.querySelector('.alert-heading').innerHTML = '<i class="fas fa-check-circle me-2"></i>训练成功!';
-            
-            // 格式化指标数据
-            const metricsHtml = `
-                <p><strong>模型类型:</strong> ${data.model_type}</p>
-                <p><strong>数据量:</strong> ${data.data_size} 条</p>
-                <p><strong>模型性能:</strong></p>
-                <ul>
-                    <li>准确率 (Accuracy): ${(data.metrics.accuracy * 100).toFixed(2)}%</li>
-                    <li>精确率 (Precision): ${(data.metrics.precision * 100).toFixed(2)}%</li>
-                    <li>召回率 (Recall): ${(data.metrics.recall * 100).toFixed(2)}%</li>
-                    <li>F1值: ${(data.metrics.f1 * 100).toFixed(2)}%</li>
-                </ul>
-                <p class="mb-0"><small>已保存模型: ${data.model_path}</small></p>
-            `;
-            
-            trainResultContent.innerHTML = metricsHtml;
-            trainResultDiv.classList.remove('d-none');
-            
-            // 刷新模型列表
-            loadSavedModels();
-            
-            // 增加一个短暂的延迟后重新启用按钮
-            setTimeout(() => {
-                trainButton.disabled = false;
-                trainButton.innerHTML = '<i class="fas fa-graduation-cap me-2"></i>开始训练模型';
-            }, 1000);
+            // 处理成功响应
+            handleTrainingSuccess(data);
             
         } catch (error) {
             console.error('训练模型错误:', error);
@@ -90,6 +125,39 @@ function setupModelTraining() {
             trainButton.innerHTML = '<i class="fas fa-graduation-cap me-2"></i>开始训练模型';
         }
     });
+    
+    // 处理训练成功的函数
+    function handleTrainingSuccess(data) {
+        // 显示训练成功结果
+        trainResultDiv.querySelector('.alert').className = 'alert alert-success';
+        trainResultDiv.querySelector('.alert-heading').innerHTML = '<i class="fas fa-check-circle me-2"></i>训练成功!';
+        
+        // 格式化指标数据
+        const metricsHtml = `
+            <p><strong>模型类型:</strong> ${data.model_type}</p>
+            <p><strong>数据量:</strong> ${data.data_size} 条</p>
+            <p><strong>模型性能:</strong></p>
+            <ul>
+                <li>准确率 (Accuracy): ${(data.metrics.accuracy * 100).toFixed(2)}%</li>
+                <li>精确率 (Precision): ${(data.metrics.precision * 100).toFixed(2)}%</li>
+                <li>召回率 (Recall): ${(data.metrics.recall * 100).toFixed(2)}%</li>
+                <li>F1值: ${(data.metrics.f1 * 100).toFixed(2)}%</li>
+            </ul>
+            <p class="mb-0"><small>已保存模型: ${data.model_path}</small></p>
+        `;
+        
+        trainResultContent.innerHTML = metricsHtml;
+        trainResultDiv.classList.remove('d-none');
+        
+        // 刷新模型列表
+        loadSavedModels();
+        
+        // 增加一个短暂的延迟后重新启用按钮
+        setTimeout(() => {
+            trainButton.disabled = false;
+            trainButton.innerHTML = '<i class="fas fa-graduation-cap me-2"></i>开始训练模型';
+        }, 1000);
+    }
     
     // 添加刷新模型列表按钮事件
     const refreshModelsBtn = document.getElementById('refresh-models-btn');
@@ -258,8 +326,54 @@ function getModelName(modelType) {
 }
 
 // 显示Toast消息（复用main.js中的函数）
+// 创建列选择模态框
+function createColumnsModal() {
+    const modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.id = 'columnsModal';
+    modal.setAttribute('tabindex', '-1');
+    modal.setAttribute('aria-labelledby', 'columnsModalLabel');
+    modal.setAttribute('aria-hidden', 'true');
+    
+    modal.innerHTML = `
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="columnsModalLabel">选择数据列</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>请选择CSV文件中的文本列和标签列：</p>
+                    <form id="columns-form">
+                        <div class="mb-3">
+                            <label for="text-column-select" class="form-label">文本列</label>
+                            <select class="form-select" id="text-column-select" required>
+                                <!-- 选项将由JavaScript动态生成 -->
+                            </select>
+                            <div class="form-text">包含短信文本内容的列</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="label-column-select" class="form-label">标签列</label>
+                            <select class="form-select" id="label-column-select" required>
+                                <!-- 选项将由JavaScript动态生成 -->
+                            </select>
+                            <div class="form-text">包含标签（垃圾/正常）的列</div>
+                        </div>
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">确认并开始训练</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    return modal;
+}
+
 function showToast(type, title, message) {
-    const toastContainer = document.querySelector('.toast-container');
+    let toastContainer = document.querySelector('.toast-container');
     
     if (!toastContainer) {
         // 如果没有Toast容器，创建一个

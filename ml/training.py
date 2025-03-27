@@ -27,12 +27,14 @@ class SMSDataset(Dataset):
     def __getitem__(self, idx):
         return torch.FloatTensor(self.features[idx]), torch.FloatTensor([self.labels[idx]])
 
-def load_data(filepath):
+def load_data(filepath, text_column='', label_column=''):
     """
     加载SMS数据集，支持多种常见的CSV文件格式
     
     参数:
         filepath: CSV文件路径
+        text_column: 用户指定的文本列名（如果为空则自动推断）
+        label_column: 用户指定的标签列名（如果为空则自动推断）
     
     返回:
         features: 特征矩阵
@@ -44,62 +46,72 @@ def load_data(filepath):
         logging.info(f"成功读取CSV文件，列名: {df.columns.tolist()}")
         
         # 判断数据格式并获取文本列和标签列
-        text_column = None
-        label_column = None
-        
-        # 常见的文本列名
-        possible_text_columns = ['text', 'message', 'sms', 'content', '内容', '短信', '文本']
-        # 常见的标签列名
-        possible_label_columns = ['label', 'spam', 'is_spam', 'class', 'category', '标签', '分类']
-        
-        # 尝试查找文本列
-        for col in possible_text_columns:
-            if col in df.columns:
-                text_column = col
-                logging.info(f"找到文本列: {col}")
-                break
-        
-        # 尝试查找标签列
-        for col in possible_label_columns:
-            if col in df.columns:
-                label_column = col
-                logging.info(f"找到标签列: {col}")
-                break
-        
-        # 如果没有找到文本列，尝试通过列数据类型推断（文本列通常是字符串类型）
-        if text_column is None:
-            for col in df.columns:
-                if df[col].dtype == 'object' and label_column != col:
+        # 如果用户已指定列名且列存在，则使用用户指定的
+        if text_column and text_column in df.columns:
+            logging.info(f"使用用户指定的文本列: {text_column}")
+        else:
+            text_column = None
+            # 自动推断文本列
+            # 常见的文本列名
+            possible_text_columns = ['text', 'message', 'sms', 'content', 'Message', '内容', '短信', '文本']
+            
+            # 尝试查找文本列
+            for col in possible_text_columns:
+                if col in df.columns:
                     text_column = col
-                    logging.info(f"根据数据类型推断文本列: {col}")
+                    logging.info(f"找到文本列: {col}")
                     break
+            
+            # 如果没有找到文本列，尝试通过列数据类型推断（文本列通常是字符串类型）
+            if text_column is None:
+                for col in df.columns:
+                    if df[col].dtype == 'object' and (not label_column or label_column != col):
+                        text_column = col
+                        logging.info(f"根据数据类型推断文本列: {col}")
+                        break
+            
+            # 如果仍未找到文本列，使用第一列
+            if text_column is None and len(df.columns) > 0:
+                text_column = df.columns[0]
+                logging.info(f"未找到明确的文本列，使用第一列: {text_column}")
         
-        # 如果仍未找到文本列，使用第一列
-        if text_column is None and len(df.columns) > 0:
-            text_column = df.columns[0]
-            logging.info(f"未找到明确的文本列，使用第一列: {text_column}")
-        
-        # 如果未找到标签列且有"ham"/"spam"值的列，将其视为标签列
-        if label_column is None:
-            for col in df.columns:
-                if col != text_column:
-                    unique_values = df[col].dropna().unique()
-                    if len(unique_values) <= 5:  # 标签列通常具有少量唯一值
-                        unique_str = [str(v).lower() for v in unique_values]
-                        if any('spam' in s for s in unique_str) or any('ham' in s for s in unique_str) or \
-                           any('垃圾' in s for s in unique_str) or any('正常' in s for s in unique_str) or \
-                           any(s in ['0', '1'] for s in unique_str):
-                            label_column = col
-                            logging.info(f"根据值内容推断标签列: {col}")
-                            break
-        
-        # 如果仍未找到标签列，使用第二列（如果存在）
-        if label_column is None and len(df.columns) > 1:
-            for col in df.columns:
-                if col != text_column:
+        # 处理标签列
+        if label_column and label_column in df.columns:
+            logging.info(f"使用用户指定的标签列: {label_column}")
+        else:
+            label_column = None
+            # 自动推断标签列
+            # 常见的标签列名
+            possible_label_columns = ['label', 'spam', 'is_spam', 'class', 'category', 'Label', '标签', '分类']
+            
+            # 尝试查找标签列
+            for col in possible_label_columns:
+                if col in df.columns and col != text_column:
                     label_column = col
-                    logging.info(f"未找到明确的标签列，使用列: {label_column}")
+                    logging.info(f"找到标签列: {col}")
                     break
+            
+            # 如果未找到标签列且有"ham"/"spam"值的列，将其视为标签列
+            if label_column is None:
+                for col in df.columns:
+                    if col != text_column:
+                        unique_values = df[col].dropna().unique()
+                        if len(unique_values) <= 5:  # 标签列通常具有少量唯一值
+                            unique_str = [str(v).lower() for v in unique_values]
+                            if any('spam' in s for s in unique_str) or any('ham' in s for s in unique_str) or \
+                               any('垃圾' in s for s in unique_str) or any('正常' in s for s in unique_str) or \
+                               any(s in ['0', '1'] for s in unique_str):
+                                label_column = col
+                                logging.info(f"根据值内容推断标签列: {col}")
+                                break
+            
+            # 如果仍未找到标签列，使用第一个非文本列
+            if label_column is None and len(df.columns) > 1:
+                for col in df.columns:
+                    if col != text_column:
+                        label_column = col
+                        logging.info(f"未找到明确的标签列，使用列: {label_column}")
+                        break
         
         # 确保找到了文本列和标签列
         if text_column is None or label_column is None:
@@ -131,8 +143,15 @@ def load_data(filepath):
                     labels.append(0)
         
         # 添加元数据列（如果存在）
-        send_freq = df.get('send_freq', [0] * len(texts)).tolist()
-        is_night = df.get('is_night', [0] * len(texts)).tolist()
+        if 'send_freq' in df.columns:
+            send_freq = df['send_freq'].tolist()
+        else:
+            send_freq = [0] * len(texts)
+            
+        if 'is_night' in df.columns:
+            is_night = df['is_night'].tolist()
+        else:
+            is_night = [0] * len(texts)
         
         # 提取特征
         features = []

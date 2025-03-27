@@ -29,7 +29,7 @@ class SMSDataset(Dataset):
 
 def load_data(filepath):
     """
-    加载SMS数据集
+    加载SMS数据集，支持多种常见的CSV文件格式
     
     参数:
         filepath: CSV文件路径
@@ -41,18 +41,94 @@ def load_data(filepath):
     try:
         # 读取CSV文件
         df = pd.read_csv(filepath)
+        logging.info(f"成功读取CSV文件，列名: {df.columns.tolist()}")
         
-        # 确保必要的列存在
-        required_columns = ['text', 'label']
-        if not all(col in df.columns for col in required_columns):
-            raise ValueError("CSV文件必须包含'text'和'label'列")
+        # 判断数据格式并获取文本列和标签列
+        text_column = None
+        label_column = None
         
-        # 提取特征和标签
-        texts = df['text'].tolist()
-        labels = df['label'].tolist()
+        # 常见的文本列名
+        possible_text_columns = ['text', 'message', 'sms', 'content', '内容', '短信', '文本']
+        # 常见的标签列名
+        possible_label_columns = ['label', 'spam', 'is_spam', 'class', 'category', '标签', '分类']
         
-        # 转换标签为数值
-        labels = [1 if label == 'spam' else 0 for label in labels]
+        # 尝试查找文本列
+        for col in possible_text_columns:
+            if col in df.columns:
+                text_column = col
+                logging.info(f"找到文本列: {col}")
+                break
+        
+        # 尝试查找标签列
+        for col in possible_label_columns:
+            if col in df.columns:
+                label_column = col
+                logging.info(f"找到标签列: {col}")
+                break
+        
+        # 如果没有找到文本列，尝试通过列数据类型推断（文本列通常是字符串类型）
+        if text_column is None:
+            for col in df.columns:
+                if df[col].dtype == 'object' and label_column != col:
+                    text_column = col
+                    logging.info(f"根据数据类型推断文本列: {col}")
+                    break
+        
+        # 如果仍未找到文本列，使用第一列
+        if text_column is None and len(df.columns) > 0:
+            text_column = df.columns[0]
+            logging.info(f"未找到明确的文本列，使用第一列: {text_column}")
+        
+        # 如果未找到标签列且有"ham"/"spam"值的列，将其视为标签列
+        if label_column is None:
+            for col in df.columns:
+                if col != text_column:
+                    unique_values = df[col].dropna().unique()
+                    if len(unique_values) <= 5:  # 标签列通常具有少量唯一值
+                        unique_str = [str(v).lower() for v in unique_values]
+                        if any('spam' in s for s in unique_str) or any('ham' in s for s in unique_str) or \
+                           any('垃圾' in s for s in unique_str) or any('正常' in s for s in unique_str) or \
+                           any(s in ['0', '1'] for s in unique_str):
+                            label_column = col
+                            logging.info(f"根据值内容推断标签列: {col}")
+                            break
+        
+        # 如果仍未找到标签列，使用第二列（如果存在）
+        if label_column is None and len(df.columns) > 1:
+            for col in df.columns:
+                if col != text_column:
+                    label_column = col
+                    logging.info(f"未找到明确的标签列，使用列: {label_column}")
+                    break
+        
+        # 确保找到了文本列和标签列
+        if text_column is None or label_column is None:
+            raise ValueError(f"无法确定文本列和标签列。找到的列: {df.columns.tolist()}")
+        
+        # 提取文本和标签
+        texts = df[text_column].fillna('').astype(str).tolist()
+        raw_labels = df[label_column].tolist()
+        
+        # 转换标签为数值（0=正常，1=垃圾）
+        labels = []
+        for label in raw_labels:
+            # 将标签转换为小写字符串以便比较
+            label_str = str(label).lower().strip()
+            
+            # 判断是否为垃圾短信
+            if label_str in ['1', 'spam', 'true', 'yes', '垃圾', '垃圾短信', 'junk']:
+                labels.append(1)  # 垃圾短信
+            elif label_str in ['0', 'ham', 'false', 'no', '正常', '正常短信', 'legitimate']:
+                labels.append(0)  # 正常短信
+            else:
+                # 对于其他值，尝试转换为数字
+                try:
+                    numeric_label = float(label_str)
+                    labels.append(1 if numeric_label > 0.5 else 0)
+                except:
+                    # 默认情况下，将无法识别的标签视为正常短信
+                    logging.warning(f"无法识别的标签值: {label_str}，默认视为正常短信")
+                    labels.append(0)
         
         # 添加元数据列（如果存在）
         send_freq = df.get('send_freq', [0] * len(texts)).tolist()
@@ -67,10 +143,13 @@ def load_data(filepath):
             feature = extract_features(cleaned_text, None, send_freq[i], is_night[i])
             features.append(feature)
         
+        logging.info(f"已加载 {len(texts)} 条数据，其中垃圾短信 {sum(labels)} 条")
+        
         return np.array(features), np.array(labels)
     
     except Exception as e:
         logging.error(f"加载数据错误: {str(e)}")
+        logging.exception("详细错误信息:")
         return None, None
 
 def train_model(model, features, labels, model_type, model_save_path, epochs=10, batch_size=32, learning_rate=0.001):

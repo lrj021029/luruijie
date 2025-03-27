@@ -16,13 +16,9 @@ if HAS_TORCH:
         logging.error(f"导入torch库失败: {e}")
         HAS_TORCH = False
 
-if HAS_TENSORFLOW:
-    try:
-        import tensorflow as tf
-        logging.info("成功导入tensorflow库")
-    except Exception as e:
-        logging.error(f"导入tensorflow库失败: {e}")
-        HAS_TENSORFLOW = False
+# 我们不直接使用TensorFlow，因此禁用它以避免兼容性问题
+HAS_TENSORFLOW = False
+logging.info("已禁用TensorFlow，使用替代方法")
 
 # 设置日志级别
 logging.basicConfig(level=logging.DEBUG)

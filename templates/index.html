@@ -356,6 +356,103 @@
     </div>
 </div>
 
+<!-- 模型训练和管理模块 -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-brain me-2"></i>模型训练与管理</h5>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="refresh-models-btn">
+                    <i class="fas fa-sync-alt me-1"></i>刷新模型列表
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <!-- 左侧 - 模型训练表单 -->
+                    <div class="col-lg-6">
+                        <h6 class="border-bottom pb-2"><i class="fas fa-cogs me-2"></i>训练新模型</h6>
+                        <form id="train-model-form" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label for="training-file" class="form-label">上传训练数据 (CSV文件)</label>
+                                <input type="file" class="form-control" id="training-file" name="file" accept=".csv" required>
+                                <div class="form-text">CSV文件必须包含文本内容列和标签列（0:正常短信/1:垃圾短信 或 ham/spam）</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="training-model-type" class="form-label">选择模型类型</label>
+                                <select class="form-select" id="training-model-type" name="model_type">
+                                    <option value="roberta">RoBERTa (Transformer类)</option>
+                                    <option value="bert">BERT (Transformer类)</option>
+                                    <option value="lstm">LSTM (循环神经网络)</option>
+                                    <option value="cnn">CNN (卷积神经网络)</option>
+                                    <option value="xlnet">XLNet (Transformer类)</option>
+                                    <option value="gpt">GPT (Transformer类)</option>
+                                    <option value="attention_lstm">Attention LSTM (带注意力机制)</option>
+                                    <option value="svm">SVM (传统机器学习)</option>
+                                    <option value="naive_bayes">朴素贝叶斯 (传统机器学习)</option>
+                                </select>
+                            </div>
+                            
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <label for="epochs" class="form-label">训练轮数</label>
+                                    <input type="number" class="form-control" id="epochs" name="epochs" min="1" max="50" value="10">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="batch-size" class="form-label">批次大小</label>
+                                    <input type="number" class="form-control" id="batch-size" name="batch_size" min="8" max="128" value="32">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="learning-rate" class="form-label">学习率</label>
+                                    <input type="number" class="form-control" id="learning-rate" name="learning_rate" min="0.0001" max="0.1" step="0.0001" value="0.001">
+                                </div>
+                            </div>
+                            
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-success" id="train-button">
+                                    <i class="fas fa-graduation-cap me-2"></i>开始训练模型
+                                </button>
+                            </div>
+                        </form>
+                        
+                        <div class="train-result mt-3 d-none">
+                            <div class="alert alert-success">
+                                <h6 class="alert-heading"><i class="fas fa-check-circle me-2"></i>训练成功!</h6>
+                                <div id="train-result-content"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 右侧 - 已保存模型列表 -->
+                    <div class="col-lg-6">
+                        <h6 class="border-bottom pb-2"><i class="fas fa-save me-2"></i>已保存的模型</h6>
+                        <div id="saved-models-container">
+                            <div class="text-center py-5" id="models-loading">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">加载中...</span>
+                                </div>
+                                <p class="mt-2">正在加载模型列表...</p>
+                            </div>
+                            
+                            <div id="saved-models-list" class="d-none">
+                                <!-- 模型列表将通过JS动态填充 -->
+                                <div class="accordion" id="savedModelsAccordion">
+                                    <!-- 动态填充内容 -->
+                                </div>
+                            </div>
+                            
+                            <div id="no-models-message" class="text-center py-4 d-none">
+                                <i class="fas fa-exclamation-circle text-muted mb-2" style="font-size: 2rem;"></i>
+                                <p>暂无已保存的模型。请上传数据集并训练模型。</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- 闪现消息 -->
 {% with messages = get_flashed_messages(with_categories=true) %}
   {% if messages %}

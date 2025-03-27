@@ -23,6 +23,16 @@ document.addEventListener("DOMContentLoaded", function() {
     if (document.getElementById('drift-chart')) {
         initDriftChart();
     }
+    
+    // 如果有模型训练表单，设置相关事件
+    if (document.getElementById('train-model-form')) {
+        setupModelTraining();
+    }
+    
+    // 如果有已保存模型容器，加载模型列表
+    if (document.getElementById('saved-models-container')) {
+        loadSavedModels();
+    }
 });
 
 // 初始化所有事件监听器

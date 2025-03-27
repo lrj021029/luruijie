@@ -26,10 +26,10 @@ class SMSDataset(Dataset):
         return len(self.labels)
     
     def __getitem__(self, idx):
-        # 特征使用FloatTensor，标签使用LongTensor（分类问题需要整数标签）
-        # 确保标签是整数
-        label = int(self.labels[idx])
-        return torch.FloatTensor(self.features[idx]), torch.tensor(label, dtype=torch.long)
+        # 特征使用FloatTensor，标签使用FloatTensor（BCEWithLogitsLoss需要浮点数标签）
+        # 确保标签是浮点数
+        label = float(self.labels[idx])
+        return torch.FloatTensor(self.features[idx]), torch.tensor(label, dtype=torch.float)
 
 def load_data(filepath, text_column='', label_column=''):
     """

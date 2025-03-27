@@ -1,0 +1,92 @@
+记住代码部分请采用中文注释，系统界面语言使用中文，此项目名为基于机器学习的垃圾短信过滤识别系统。请在模型处Add more advanced ML models (LSTM, BERT, etc.)，
+---
+
+### Prompt
+
+"Create an SMS spam filtering web application with the following structure and implementation details:
+
+1. **Project Setup**  
+   - Directory Structure:  
+     ```
+     sms-spam-filter/
+     ├── backend/
+     │   ├── app/
+     │   │   ├── __init__.py
+     │   │   ├── main.py         # FastAPI app and routers
+     │   │   ├── models.py       # Pydantic models for API
+     │   │   ├── database.py     # SQLite setup with SQLModel
+     │   │   ├── crud.py         # Database CRUD operations
+     │   │   ├── ml/
+     │   │   │   ├── __init__.py
+     │   │   │   ├── preprocessing.py  # Text cleaning, tokenization
+     │   │   │   ├── feature_extraction.py  # RoBERTa embeddings, metadata
+     │   │   │   ├── model.py        # PyTorch Classifier and VAE
+     │   │   │   ├── training.py     # Training and evaluation
+     │   │   │   ├── drift.py        # Semantic drift detection
+     │   │   │   └── utils.py        # Helper functions
+     │   │   └── routers/
+     │   │       ├── predict.py      # /predict endpoint
+     │   │       ├── upload.py       # /upload endpoint
+     │   │       ├── features.py     # /features endpoint
+     │   │       └── drift.py        # /track_drift endpoint
+     │   ├── data/                 # Sample CSV (e.g., uci_spam.csv)
+     │   ├── models_store/         # Pre-trained model weights
+     │   ├── .env                  # Environment variables
+     │   └── requirements.txt      # Dependencies
+     ├── frontend/
+     │   ├── public/
+     │   │   └── index.html
+     │   ├── src/
+     │   │   ├── App.js            # Routing and layout
+     │   │   ├── components/       # Reusable UI components
+     │   │   ├── pages/
+     │   │   │   ├── MainPage.js   # Input and results
+     │   │   │   ├── FeaturePage.js # Word cloud display
+     │   │   │   └── HistoryPage.js # Prediction history
+     │   │   ├── services/         # API calls with axios
+     │   │   ├── assets/           # Static resources
+     │   │   └── index.css         # Tailwind styles
+     │   ├── tailwind.config.js
+     │   ├── postcss.config.js
+     │   └── package.json          # Node dependencies
+     ```
+   - Backend Dependencies: `fastapi`, `uvicorn[standard]`, `sqlmodel`, `pandas`, `numpy`, `torch`, `transformers[torch]`, `scikit-learn`, `nltk`, `wordcloud`, `python-multipart`.  
+   - Frontend Dependencies: `axios`, `react-router-dom`, `chart.js`, `react-chartjs-2`, `react-wordcloud`.  
+   - Setup Tailwind CSS in React using official guide.
+
+2. **Backend (FastAPI)**  
+   - **Database**: Use SQLModel with SQLite. Define `SMSMessage` table: `id` (int, PK), `text` (str), `label` (str, nullable), `send_freq` (float), `is_night` (int), `prediction` (str, nullable), `timestamp` (datetime). Create CRUD functions: `add_sms_batch`, `get_all_sms`, `get_recent_sms`.  
+   - **Models**: Define Pydantic models: `SMSInput` (text, send_freq, is_night), `PredictionResponse` (prediction, input_text), `WordCloudResponse` (spam_words, ham_words as lists of {word, value}), `DriftResponse` (drift_history as list of {timestamp, drift_value}).  
+   - **ML - Preprocessing**: Clean text (lowercase, remove punctuation/numbers), tokenize with RoBERTa (`AutoTokenizer.from_pretrained('roberta-base')`), normalize metadata (scale send_freq, ensure is_night is 0/1).  
+   - **ML - Feature Extraction**: Extract 768-dim embeddings from RoBERTa (`AutoModel.from_pretrained('roberta-base')`), concatenate with metadata (2 dims) into 770-dim vector.  
+   - **ML - Models**:  
+     - `SpamClassifier` (PyTorch): RoBERTa embeddings -> Linear(770, 128) -> ReLU -> Dropout(0.1) -> Linear(128, 1) with BCEWithLogitsLoss.  
+     - `SMSVAE` (PyTorch): Encoder (Linear(768, 128) -> ReLU -> Linear(128, 64) for mu/log_var), Decoder (Linear(32, 128) -> ReLU -> Linear(128, 768)), latent_dim=32.  
+   - **ML - Training**: Load data from SQLite or CSV, preprocess, split 80/20, use 5-fold cross-validation, train classifier and VAE, save weights to `models_store/`.  
+   - **ML - Drift Detection**: Use VAE to encode last 100 messages, calculate KL divergence with historical distribution, trigger retraining of classifier’s final layer if > 0.5.  
+   - **API Endpoints**:  
+     - `/predict`: Accept `SMSInput`, preprocess, predict with classifier, return `PredictionResponse`, store result in DB.  
+     - `/upload`: Accept CSV file (columns: label, text, send_freq, is_night), parse with Pandas, store in SQLite, return confirmation.  
+     - `/features`: Fetch all messages, compute top 20 spam/ham word frequencies, return `WordCloudResponse`.  
+     - `/track_drift`: Run drift detection, return current drift value.  
+     - `/history`: Fetch prediction history from DB, return list of {text, send_freq, is_night, prediction, timestamp}.  
+   - **Main**: Create FastAPI app, add CORS for `http://localhost:3000`, load models on startup.
+
+3. **Frontend (React)**  
+   - **Setup**: Use React Router for `/`, `/features`, `/history`. Configure Tailwind CSS.  
+   - **API Service**: Use `axios` with base URL `http://localhost:8000`, define `predictSMS`, `uploadCSV`, `getFeatures`, `getDriftHistory`, `getPredictionHistory`.  
+   - **Pages**:  
+     - `MainPage`: Inputs (text, send_freq, is_night, file upload), 'Detect' button calls `/predict`, display result (green/red), show Chart.js line graphs for accuracy and drift (from `/track_drift`).  
+     - `FeaturePage`: Fetch `/features`, display spam/ham word clouds with `react-wordcloud`.  
+     - `HistoryPage`: Fetch `/history`, show table (text, send_freq, is_night, result, timestamp), add search filter.  
+   - **Styling**: Use Tailwind CSS for modern, responsive design with hover effects and dark mode.
+
+4. **Initial Data**: Include `uci_spam.csv` in `backend/data/` with dummy send_freq/is_night columns. Provide pre-trained classifier and VAE weights in `models_store/`.
+
+5. **Notes**:  
+   - Ensure originality by avoiding code reuse.  
+   - Use async FastAPI endpoints where possible.  
+   - Load models once on startup for efficiency.  
+   - Handle errors gracefully in backend and frontend."
+
+---

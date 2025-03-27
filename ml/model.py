@@ -665,8 +665,44 @@ def predict(model, features, model_type):
             logging.warning(f"模型 {model_type} 不可用或PyTorch不可用，使用规则和随机预测")
             model_spam_score = np.random.uniform(0.3, 0.7)
         
+        # 增强的垃圾短信检测逻辑 - 识别明显的垃圾短信模式
+        # 首先检查明显的垃圾短信特征，这比模型预测结果优先级更高
+        
+        # 强制规则：这些模式出现任何一个，直接判定为垃圾短信
+        critical_spam_patterns = [
+            r'http[s]?://', # 包含http或https链接
+            r'www\.[a-zA-Z0-9-]+\.[a-zA-Z]{2,}', # 网址模式
+            r'wap\.', # WAP链接
+            r'click.*link', # 点击链接
+            r'click.*here', # 点击这里
+            r'credit', # 信用卡
+            r'\.com', # .com域名
+            r'\.cn', # .cn域名
+            r'\.net', # .net域名
+            r'点击.*链接', # 中文点击链接
+            r'点此.*进入', # 中文点此进入
+            r'链接.*访问', # 中文链接访问
+        ]
+        
+        # 检查关键强制规则 - 只要匹配一条就判定为垃圾
+        forced_spam = False
+        for pattern in critical_spam_patterns:
+            if re.search(pattern, text_str.lower()):
+                forced_spam = True
+                logging.warning(f"强制规则触发: 匹配到关键垃圾短信模式 '{pattern}'")
+                final_spam_score = 0.98  # 几乎100%确定
+                prediction = 1  # 强制设为垃圾短信
+                confidence = final_spam_score
+                logging.warning(f"关键垃圾短信模式匹配，强制设置垃圾短信评分为 {final_spam_score:.2f}")
+                
+                # 记录预测详情后直接返回，跳过后续计算
+                logging.debug(f"短信预测(强制规则): 文本={text_str[:30]}..., " +
+                         f"规则分={rule_spam_score:.2f}, 模型分={model_spam_score:.2f}, " +
+                         f"最终分={final_spam_score:.2f}, 预测={prediction}, 置信度={confidence:.2f}")
+                return prediction, confidence
+        
+        # 如果没有触发强制规则，继续正常评分流程
         # 根据模型类型调整规则和模型权重
-        # 对于传统机器学习模型，增加模型比重
         if model_type in ['naive_bayes', 'svm']:
             # 传统机器学习模型：50%模型 + 50%规则
             model_weight = 0.5
@@ -697,12 +733,10 @@ def predict(model, features, model_type):
         prediction = 1 if final_spam_score > 0.5 else 0
         confidence = final_spam_score if prediction == 1 else (1.0 - final_spam_score)
         
-        # 增强的垃圾短信检测逻辑 - 识别明显的垃圾短信模式
-        obvious_spam_patterns = [
+        # 检查次要垃圾短信特征，如果存在可以提升评分
+        # 次要垃圾短信模式，累计计数
+        secondary_spam_patterns = [
             r'\$\d+', # 美元符号后跟数字
-            r'click here', # 点击这里
-            r'www\.[a-zA-Z0-9-]+\.[a-zA-Z]{2,}', # 网址模式
-            r'http[s]?://', # 包含http或https链接
             r'free.*offer', # 免费优惠
             r'limited time', # 限时
             r'earn money', # 赚钱
@@ -719,23 +753,31 @@ def predict(model, features, model_type):
             r'验证码.*银行', # 中文验证码银行
             r'免费.*试用', # 中文免费试用
             r'赠送.*积分', # 中文赠送积分
+            r'service', # 服务
+            r'account', # 账户
+            r'subscribe', # 订阅
+            r'unsubscribe', # 取消订阅
+            r'club', # 俱乐部
+            r'movie', # 电影
+            r'txt message', # 文本消息
         ]
         
-        # 检查是否匹配明显的垃圾短信模式
+        # 检查次要垃圾短信模式
         obvious_spam_matches = 0
-        for pattern in obvious_spam_patterns:
+        for pattern in secondary_spam_patterns:
             if re.search(pattern, text_str.lower()):
                 obvious_spam_matches += 1
-                
-        # 如果匹配了多个明显的垃圾短信模式，提高垃圾短信评分
+                logging.info(f"次要垃圾规则匹配: '{pattern}'")
+        
+        # 如果匹配了多个次要模式，提高垃圾短信评分
         if obvious_spam_matches >= 2:
-            # 至少匹配2个模式，大幅提高垃圾短信评分
-            final_spam_score = max(0.85, final_spam_score)
-            logging.info(f"检测到明显垃圾短信模式: {obvious_spam_matches}个匹配，提升评分到{final_spam_score:.2f}")
+            # 至少匹配2个次要模式，大幅提高垃圾短信评分
+            final_spam_score = max(0.9, final_spam_score)
+            logging.info(f"检测到多个次要垃圾短信模式: {obvious_spam_matches}个匹配，提升评分到{final_spam_score:.2f}")
         elif obvious_spam_matches == 1:
-            # 匹配1个模式，适当提高垃圾短信评分
-            final_spam_score = max(0.7, final_spam_score)
-            logging.info(f"检测到可能的垃圾短信模式: {obvious_spam_matches}个匹配，提升评分到{final_spam_score:.2f}")
+            # 匹配1个次要模式，适当提高垃圾短信评分
+            final_spam_score = max(0.75, final_spam_score)
+            logging.info(f"检测到1个次要垃圾短信模式，提升评分到{final_spam_score:.2f}")
         
         # 基于最终分数确定预测结果
         prediction = 1 if final_spam_score > 0.5 else 0

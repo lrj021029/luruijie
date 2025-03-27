@@ -246,10 +246,16 @@ async function loadSavedModels() {
                                                 <small class="text-muted">${model.filename}</small>
                                             </div>
                                             <div>
-                                                <button class="btn btn-sm btn-outline-primary load-model-btn" 
-                                                        data-model-path="${model.path}" data-model-type="${modelType}">
-                                                    <i class="fas fa-upload"></i> 加载
-                                                </button>
+                                                <div class="btn-group btn-group-sm">
+                                                    <button class="btn btn-outline-primary load-model-btn" 
+                                                            data-model-path="${model.path}" data-model-type="${modelType}">
+                                                        <i class="fas fa-upload"></i> 加载
+                                                    </button>
+                                                    <button class="btn btn-outline-danger delete-model-btn"
+                                                            data-model-path="${model.path}" data-model-type="${modelType}">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -289,6 +295,73 @@ async function loadSavedModels() {
                         // 恢复按钮状态
                         this.disabled = false;
                         this.innerHTML = '<i class="fas fa-upload"></i> 加载';
+                    }
+                });
+            });
+            
+            // 添加删除模型按钮的事件处理
+            document.querySelectorAll('.delete-model-btn').forEach(btn => {
+                btn.addEventListener('click', async function() {
+                    const modelPath = this.getAttribute('data-model-path');
+                    const modelType = this.getAttribute('data-model-type');
+                    const modelItem = this.closest('.list-group-item');
+                    
+                    // 显示确认对话框
+                    if (!confirm(`确定要删除此模型吗？\n模型类型: ${getModelName(modelType)}\n模型路径: ${modelPath}`)) {
+                        return;  // 用户取消删除
+                    }
+                    
+                    // 显示加载状态
+                    this.disabled = true;
+                    this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+                    
+                    try {
+                        // 调用后端API删除模型
+                        const response = await fetch('/delete_model', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                model_path: modelPath
+                            })
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (!response.ok) {
+                            throw new Error(data.error || '删除模型失败');
+                        }
+                        
+                        // 删除成功，从DOM中移除该项
+                        modelItem.remove();
+                        
+                        // 显示成功消息
+                        showToast('success', '删除成功', '模型已成功删除');
+                        
+                        // 检查该模型类型是否还有其他模型，如果没有则隐藏该类型
+                        const modelTypeContainer = document.querySelector(`#collapse${modelType}`);
+                        if (modelTypeContainer && modelTypeContainer.querySelectorAll('.list-group-item').length === 0) {
+                            const accordionItem = modelTypeContainer.closest('.accordion-item');
+                            if (accordionItem) {
+                                accordionItem.remove();
+                            }
+                        }
+                        
+                        // 检查是否还有任何模型，如果没有则显示"无模型"消息
+                        const allModelItems = document.querySelectorAll('.accordion-item');
+                        if (allModelItems.length === 0) {
+                            savedModelsList.classList.add('d-none');
+                            noModelsMessage.classList.remove('d-none');
+                        }
+                        
+                    } catch (error) {
+                        console.error('删除模型错误:', error);
+                        showToast('danger', '删除失败', error.message);
+                        
+                        // 恢复按钮状态
+                        this.disabled = false;
+                        this.innerHTML = '<i class="fas fa-trash"></i>';
                     }
                 });
             });

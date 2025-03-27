@@ -53,7 +53,7 @@ def load_data(filepath, text_column='', label_column=''):
             text_column = None
             # 自动推断文本列
             # 常见的文本列名
-            possible_text_columns = ['text', 'message', 'sms', 'content', 'Message', '内容', '短信', '文本']
+            possible_text_columns = ['text', 'message', 'sms', 'content', 'Message', 'input_ids', '内容', '短信', '文本']
             
             # 尝试查找文本列
             for col in possible_text_columns:
@@ -82,7 +82,7 @@ def load_data(filepath, text_column='', label_column=''):
             label_column = None
             # 自动推断标签列
             # 常见的标签列名
-            possible_label_columns = ['label', 'spam', 'is_spam', 'class', 'category', 'Label', '标签', '分类']
+            possible_label_columns = ['label', 'labels', 'spam', 'is_spam', 'class', 'category', 'Label', '标签', '分类']
             
             # 尝试查找标签列
             for col in possible_label_columns:

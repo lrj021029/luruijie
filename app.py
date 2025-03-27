@@ -813,6 +813,58 @@ def get_models():
         logging.error(f"获取模型列表错误: {str(e)}")
         logging.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
+        
+@app.route('/delete_model', methods=['POST'])
+def delete_model():
+    """删除保存的模型文件"""
+    try:
+        # 获取模型路径
+        model_path = request.json.get('model_path')
+        
+        if not model_path:
+            return jsonify({'error': '未提供模型路径'}), 400
+        
+        # 安全检查：确保路径是在saved_models目录下
+        saved_models_dir = os.path.join('ml', 'saved_models')
+        if not model_path.startswith(saved_models_dir) or '..' in model_path:
+            return jsonify({'error': '无效的模型路径'}), 400
+        
+        # 检查文件是否存在
+        if not os.path.exists(model_path):
+            return jsonify({'error': '模型文件不存在'}), 404
+        
+        # 检查是否是当前正在使用的模型
+        model_filename = os.path.basename(model_path)
+        model_type = None
+        
+        for mtype in model_types:
+            if model_filename.startswith(f"{mtype}_"):
+                model_type = mtype
+                break
+                
+        if model_type and model_type in models:
+            # 检查当前加载的模型的路径是否与要删除的模型相同
+            current_model = models.get(model_type)
+            if current_model is not None and hasattr(current_model, 'filepath') and current_model.filepath == model_path:
+                return jsonify({
+                    'error': '无法删除当前正在使用的模型',
+                    'model_type': model_type
+                }), 400
+        
+        # 删除文件
+        os.remove(model_path)
+        logging.info(f"已删除模型: {model_path}")
+        
+        return jsonify({
+            'success': True,
+            'message': '模型已成功删除',
+            'model_path': model_path
+        })
+        
+    except Exception as e:
+        logging.error(f"删除模型错误: {str(e)}")
+        logging.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
 
 # 启动应用时创建表
 with app.app_context():

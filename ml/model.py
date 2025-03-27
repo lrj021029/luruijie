@@ -384,17 +384,24 @@ def load_model(model_type, model_path=None):
                     # 2. 直接保存的模型对象
                     if isinstance(model_package, dict) and 'model' in model_package:
                         # 格式1：字典格式
-                        model = model_package['model']
-                        # 获取向量器（如果有）
+                        # 保留整个字典作为模型，包含model和vectorizer
+                        model = model_package
+                        # 获取向量器（如果有）并更新tokenizer
                         if 'vectorizer' in model_package and model_package['vectorizer'] is not None:
                             tokenizer = model_package['vectorizer']
-                        logging.info(f"成功加载传统机器学习模型(字典格式): {model_path}")
+                            # 更新tokenizer缓存
+                            if tokenizer is not None and model_type:
+                                tokenizer_cache[model_type] = tokenizer
+                            
+                        # 记录模型的具体类型名称，便于调试
+                        actual_model_type = type(model_package['model']).__name__
+                        logging.info(f"成功加载传统机器学习模型(字典格式): {model_path}, 实际模型类型: {actual_model_type}")
                     else:
                         # 格式2：直接保存的模型对象
                         model = model_package
-                        # 为模型添加文件路径属性
-                        model.filepath = model_path
-                        logging.info(f"成功加载传统机器学习模型(直接格式): {model_path}")
+                        # 记录模型的具体类型名称，便于调试
+                        actual_model_type = type(model).__name__
+                        logging.info(f"成功加载传统机器学习模型(直接格式): {model_path}, 实际模型类型: {actual_model_type}")
                 except Exception as load_err:
                     logging.error(f"加载传统机器学习模型失败: {str(load_err)}")
                     logging.error("将使用默认初始化的模型")
@@ -641,19 +648,29 @@ def predict(model, features, model_type):
                         logging.info(f"输入为特征向量，形状: {X.shape}")
                     
                     # 获取预测
-                    prediction = actual_model.predict(X)[0]
-                    logging.info(f"原始预测结果: {prediction}")
+                    try:
+                        prediction = actual_model.predict(X)[0]
+                        logging.info(f"原始预测结果: {prediction}")
+                    except Exception as pred_error:
+                        logging.error(f"预测调用失败: {str(pred_error)}")
+                        logging.error(traceback.format_exc())
+                        prediction = 0
                     
                     # 如果模型支持概率预测
                     if hasattr(actual_model, 'predict_proba') and callable(getattr(actual_model, 'predict_proba')):
-                        proba = actual_model.predict_proba(X)[0]
-                        logging.info(f"预测概率: {proba}")
-                        
-                        # 提取第1类（垃圾短信）的概率
-                        if len(proba) >= 2:
-                            model_spam_score = proba[1]  # 第二个类别的概率（通常是正类）
-                        else:
-                            model_spam_score = float(prediction)  # 使用硬预测结果
+                        try:
+                            proba = actual_model.predict_proba(X)[0]
+                            logging.info(f"预测概率: {proba}")
+                            
+                            # 提取第1类（垃圾短信）的概率
+                            if len(proba) >= 2:
+                                model_spam_score = float(proba[1])  # 第二个类别的概率（通常是正类）
+                            else:
+                                model_spam_score = float(prediction)  # 使用硬预测结果
+                        except Exception as proba_error:
+                            logging.error(f"概率预测失败: {str(proba_error)}")
+                            logging.error(traceback.format_exc())
+                            model_spam_score = float(prediction)
                     else:
                         # 如果不支持概率预测，使用硬预测结果
                         model_spam_score = float(prediction)

@@ -35,8 +35,13 @@ class SMSDataset(Dataset):
             # 其他模型使用浮点型特征
             feature = torch.FloatTensor(self.features[idx])
             
-        # 标签统一使用浮点型（适用于BCEWithLogitsLoss）
-        label = torch.tensor(float(self.labels[idx]), dtype=torch.float)
+        # 根据模型类型决定标签的数据类型
+        if self.model_type in ['roberta', 'bert', 'xlnet', 'gpt']:
+            # 这些模型使用BCE损失，需要浮点型标签
+            label = torch.tensor(float(self.labels[idx]), dtype=torch.float)
+        else:
+            # 其他模型可能使用交叉熵损失，需要长整型标签
+            label = torch.tensor(int(self.labels[idx]), dtype=torch.long)
         return feature, label
 
 def load_data(filepath, text_column='', label_column=''):

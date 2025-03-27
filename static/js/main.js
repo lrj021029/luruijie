@@ -921,8 +921,28 @@ async function loadWordCloudData(forceReload = false) {
 // 渲染词云
 function renderWordCloud(container, words, color) {
     try {
-        // 转换数据格式为WordCloud2.js需要的格式 [[word, weight], [word, weight]]
-        const wordList = words.map(item => [item.word, item.value]);
+        // 标准化数据格式为WordCloud2.js需要的格式 [[word, weight], [word, weight]]
+        let wordList = [];
+        
+        // 检查数据格式并转换
+        if (words.length > 0) {
+            // 检查第一项是否是数组格式 [word, weight]
+            if (Array.isArray(words[0])) {
+                wordList = words;
+            } 
+            // 检查是否为对象格式 {word: string, value: number}
+            else if (typeof words[0] === 'object' && words[0].hasOwnProperty('word') && words[0].hasOwnProperty('value')) {
+                wordList = words.map(item => [item.word, item.value]);
+            }
+            // 检查是否为元组格式（可能来自Python后端） (word, value)
+            else if (typeof words[0] === 'object' && words[0].length === 2) {
+                wordList = words.map(item => [item[0], item[1]]);
+            }
+            else {
+                console.error("无法识别词云数据格式:", words[0]);
+                throw new Error('词云数据格式不支持');
+            }
+        }
         
         console.log("正在渲染词云，单词数量:", wordList.length);
         console.log("词云数据示例:", wordList.slice(0, 5));
@@ -964,17 +984,21 @@ function renderWordCloud(container, words, color) {
             list: wordList,
             fontFamily: 'Pingfang SC, Source Sans Pro, Microsoft Yahei',
             fontWeight: 'bold',
-            color: color,
-            minSize: 12,
-            weightFactor: 6,  // 增大权重因子使词云更明显
+            color: color == 'danger' ? 'rgba(220, 53, 69, 0.8)' : 'rgba(13, 202, 240, 0.8)',
+            minSize: 14,
+            weightFactor: 8,  // 增大权重因子使词云更明显
             backgroundColor: 'transparent',
             gridSize: 8,
             drawOutOfBound: false,
+            shape: 'circle',
+            rotateRatio: 0.5,
+            shrinkToFit: true,
             hover: function(item, dimension) {
                 try {
                     const infoElement = container.querySelector('.word-info');
                     if (infoElement && item && item[0]) {
                         infoElement.textContent = `"${item[0]}" 出现 ${item[1]} 次`;
+                        infoElement.style.fontWeight = 'bold';
                     }
                 } catch (hoverError) {
                     console.error("词云hover事件错误:", hoverError);

@@ -38,6 +38,17 @@ class AppState {
                 sortColumn: 'timestamp',
                 sortDirection: 'desc',
                 currentPage: 1
+            },
+            
+            // 数据集页面状态
+            datasets: {
+                loaded: false,
+                scrollPosition: 0,
+                datasetsList: null,
+                uploadForm: {
+                    name: '',
+                    description: ''
+                }
             }
         };
         

@@ -18,6 +18,8 @@ document.addEventListener("DOMContentLoaded", function() {
         currentPage = 'features';
     } else if (currentPath.includes('history')) {
         currentPage = 'history';
+    } else if (currentPath.includes('datasets')) {
+        currentPage = 'datasets';
     }
     
     console.log('当前页面:', currentPage);
@@ -84,6 +86,8 @@ function setupNavLinkInterception() {
                 currentPage = 'features';
             } else if (currentPath.includes('history')) {
                 currentPage = 'history';
+            } else if (currentPath.includes('datasets')) {
+                currentPage = 'datasets';
             }
             
             // 保存当前页面状态
@@ -203,6 +207,32 @@ function saveCurrentPageState(pageType) {
                 }
                 
                 window.AppState.updatePageState('history', historyUpdates);
+                break;
+                
+            case 'datasets':
+                // 数据集页面数据
+                const datasetsUpdates = {
+                    loaded: true,
+                    scrollPosition: window.scrollY
+                };
+                
+                // 保存表单状态
+                const nameInput = document.getElementById('dataset-name');
+                const descriptionInput = document.getElementById('dataset-description');
+                
+                if (nameInput || descriptionInput) {
+                    datasetsUpdates.uploadForm = {
+                        name: nameInput ? nameInput.value : '',
+                        description: descriptionInput ? descriptionInput.value : ''
+                    };
+                }
+                
+                // 保存数据集列表数据
+                if (window.cachedDatasetsData) {
+                    datasetsUpdates.datasetsList = window.cachedDatasetsData;
+                }
+                
+                window.AppState.updatePageState('datasets', datasetsUpdates);
                 break;
         }
         
@@ -455,6 +485,50 @@ function restorePageState(pageType) {
                             }
                         }
                     }, 500);
+                }
+                break;
+                
+            case 'datasets':
+                // 数据集页面
+                if (pageState.loaded) {
+                    // 恢复表单值
+                    const nameInput = document.getElementById('dataset-name');
+                    const descriptionInput = document.getElementById('dataset-description');
+                    
+                    if (nameInput && pageState.uploadForm && pageState.uploadForm.name) {
+                        nameInput.value = pageState.uploadForm.name;
+                    }
+                    
+                    if (descriptionInput && pageState.uploadForm && pageState.uploadForm.description) {
+                        descriptionInput.value = pageState.uploadForm.description;
+                    }
+                    
+                    // 恢复缓存的数据集列表
+                    if (pageState.datasetsList) {
+                        window.cachedDatasetsData = pageState.datasetsList;
+                    }
+                    
+                    // 自动加载数据集列表
+                    setTimeout(() => {
+                        if (typeof loadDatasets === 'function') {
+                            // 如果有缓存数据，可以考虑直接使用
+                            if (window.cachedDatasetsData) {
+                                // 这里可以添加使用缓存数据的逻辑
+                                // 现在先直接重新加载数据
+                                loadDatasets();
+                            } else {
+                                // 否则加载新数据
+                                loadDatasets();
+                            }
+                            
+                            // 恢复滚动位置
+                            if (pageState.scrollPosition) {
+                                setTimeout(() => {
+                                    window.scrollTo(0, pageState.scrollPosition);
+                                }, 300);
+                            }
+                        }
+                    }, 200);
                 }
                 break;
         }

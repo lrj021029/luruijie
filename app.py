@@ -35,16 +35,18 @@ app.secret_key = os.environ.get("SESSION_SECRET", "sms_spam_filter_secret")
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///sms_spam.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["UPLOAD_FOLDER"] = "uploads"
+app.config["DATASETS_FOLDER"] = "datasets"
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB限制
 
 # 确保上传目录存在
 os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+os.makedirs(app.config["DATASETS_FOLDER"], exist_ok=True)
 
 # 初始化应用与数据库
 db.init_app(app)
 
 # 导入模型
-from models import SMSMessage
+from models import SMSMessage, Dataset
 
 # 初始化机器学习模型
 models = {}
@@ -996,6 +998,207 @@ def delete_model():
         
     except Exception as e:
         logging.error(f"删除模型错误: {str(e)}")
+        logging.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
+# 数据集管理相关路由
+@app.route('/datasets')
+def datasets():
+    """显示数据集管理页面"""
+    return render_template('datasets.html')
+
+@app.route('/get_datasets')
+def get_datasets():
+    """获取所有数据集信息"""
+    try:
+        datasets = Dataset.query.order_by(Dataset.upload_time.desc()).all()
+        result = []
+        
+        for dataset in datasets:
+            result.append({
+                'id': dataset.id,
+                'name': dataset.name,
+                'filename': dataset.filename,
+                'description': dataset.description,
+                'total_records': dataset.total_records,
+                'spam_count': dataset.spam_count,
+                'ham_count': dataset.ham_count,
+                'upload_time': dataset.upload_time.strftime('%Y-%m-%d %H:%M:%S'),
+                'last_used': dataset.last_used.strftime('%Y-%m-%d %H:%M:%S') if dataset.last_used else None
+            })
+        
+        return jsonify({'success': True, 'datasets': result})
+    
+    except Exception as e:
+        logging.error(f"获取数据集列表错误: {str(e)}")
+        logging.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/save_dataset', methods=['POST'])
+def save_dataset():
+    """将上传的CSV文件保存为数据集"""
+    if 'file' not in request.files:
+        return jsonify({'error': '未找到文件'}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': '未选择文件'}), 400
+    
+    if not file.filename.endswith('.csv'):
+        return jsonify({'error': '请上传CSV文件'}), 400
+    
+    try:
+        # 获取数据集信息
+        name = request.form.get('name', '')
+        description = request.form.get('description', '')
+        
+        if not name:
+            name = file.filename
+        
+        # 保存文件到数据集目录
+        filename = secure_filename(file.filename)
+        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+        saved_filename = f"{timestamp}_{filename}"
+        filepath = os.path.join(app.config['DATASETS_FOLDER'], saved_filename)
+        file.save(filepath)
+        
+        # 尝试多种编码读取CSV文件
+        encodings = ['utf-8', 'latin1', 'gbk', 'gb2312', 'cp1252']
+        df = None
+        for encoding in encodings:
+            try:
+                df = pd.read_csv(filepath, encoding=encoding)
+                break
+            except Exception:
+                if encoding == encodings[-1]:  # 最后一个编码尝试也失败
+                    return jsonify({'error': '无法读取CSV文件，请检查编码格式'}), 400
+        
+        # 统计数据集信息
+        total_records = len(df)
+        spam_count = 0
+        ham_count = 0
+        
+        # 尝试查找标签列
+        possible_label_columns = ['label', 'class', 'category', 'spam', 'is_spam', '标签', '分类', '垃圾']
+        label_column = None
+        
+        for col in possible_label_columns:
+            if col in df.columns:
+                label_column = col
+                break
+        
+        # 如果找到标签列，统计垃圾短信和正常短信数量
+        if label_column:
+            for label in df[label_column]:
+                label_str = str(label).lower().strip()
+                if label_str in ['spam', '1', 'true', 'yes', '垃圾', '垃圾短信']:
+                    spam_count += 1
+                elif label_str in ['ham', '0', 'false', 'no', '正常', '正常短信']:
+                    ham_count += 1
+        
+        # 创建数据集记录
+        new_dataset = Dataset(
+            name=name,
+            filename=filename,
+            file_path=filepath,
+            description=description,
+            total_records=total_records,
+            spam_count=spam_count,
+            ham_count=ham_count,
+            upload_time=datetime.now()
+        )
+        
+        db.session.add(new_dataset)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'dataset': {
+                'id': new_dataset.id,
+                'name': new_dataset.name,
+                'filename': new_dataset.filename,
+                'description': new_dataset.description,
+                'total_records': new_dataset.total_records,
+                'spam_count': new_dataset.spam_count,
+                'ham_count': new_dataset.ham_count,
+                'upload_time': new_dataset.upload_time.strftime('%Y-%m-%d %H:%M:%S')
+            }
+        })
+    
+    except Exception as e:
+        logging.error(f"保存数据集错误: {str(e)}")
+        logging.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/delete_dataset/<int:dataset_id>', methods=['DELETE'])
+def delete_dataset(dataset_id):
+    """删除数据集"""
+    try:
+        dataset = Dataset.query.get_or_404(dataset_id)
+        
+        # 如果数据集已被使用，也删除关联的数据
+        if dataset.messages:
+            for message in dataset.messages:
+                db.session.delete(message)
+        
+        # 删除文件
+        if dataset.file_path and os.path.exists(dataset.file_path):
+            os.remove(dataset.file_path)
+        
+        # 删除数据集记录
+        db.session.delete(dataset)
+        db.session.commit()
+        
+        return jsonify({'success': True})
+    
+    except Exception as e:
+        logging.error(f"删除数据集错误: {str(e)}")
+        logging.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/use_dataset/<int:dataset_id>', methods=['POST'])
+def use_dataset(dataset_id):
+    """使用数据集训练模型或进行预测"""
+    try:
+        dataset = Dataset.query.get_or_404(dataset_id)
+        
+        # 检查文件是否存在
+        if not os.path.exists(dataset.file_path):
+            return jsonify({'error': '数据集文件不存在'}), 400
+        
+        # 获取请求类型（train 或 predict）
+        action = request.form.get('action', 'predict')
+        model_type = request.form.get('model_type', '')
+        
+        # 尝试多种编码读取CSV文件
+        encodings = ['utf-8', 'latin1', 'gbk', 'gb2312', 'cp1252']
+        df = None
+        for encoding in encodings:
+            try:
+                df = pd.read_csv(dataset.file_path, encoding=encoding)
+                break
+            except Exception:
+                if encoding == encodings[-1]:  # 最后一个编码尝试也失败
+                    return jsonify({'error': '无法读取CSV文件，请检查编码格式'}), 400
+        
+        # 更新最后使用时间
+        dataset.last_used = datetime.now()
+        db.session.commit()
+        
+        # 根据操作类型处理
+        if action == 'train':
+            # 训练逻辑...
+            return jsonify({'success': True, 'message': '训练功能尚未实现'})
+        
+        elif action == 'predict':
+            # 预测逻辑...
+            return jsonify({'success': True, 'message': '预测功能尚未实现'})
+        
+        else:
+            return jsonify({'error': '无效的操作类型'}), 400
+        
+    except Exception as e:
+        logging.error(f"使用数据集错误: {str(e)}")
         logging.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 

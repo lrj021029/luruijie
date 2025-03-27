@@ -1442,6 +1442,4 @@ function toggleTheme() {
         }
     }
 }
-
-// 关闭document.ready函数
-});
+// document.addEventListener的结束括号

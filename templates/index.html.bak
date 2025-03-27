@@ -19,7 +19,6 @@
             <p class="mb-0">请先在下方"模型训练与管理"区域训练一个模型，然后再进行短信检测。</p>
         </div>
         
-        <!-- 短信检测卡片 -->
         <div class="card mb-4">
             <div class="card-header">
                 <h5 class="mb-0"><i class="fas fa-search me-2"></i>短信检测</h5>
@@ -319,15 +318,214 @@
         
         <!-- 模型简介 -->
         <div class="accordion" id="modelAccordion">
-            <div class="accordion-item">
-                <h2 class="accordion-header">
-                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseEnsemble">
-                        <span class="model-badge badge-ensemble">Ensemble</span> 模型说明
-                    </button>
-                </h2>
-                <div id="collapseEnsemble" class="accordion-collapse collapse" data-bs-parent="#modelAccordion">
-                    <div class="accordion-body">
-                        <p><strong>Attention Ensemble</strong> (注意力集成学习) 是一种高级的模型组合方法，它使用注意力机制动态地为不同模型的预测结果分配权重。与简单的投票或平均集成不同，它能够针对不同类型的短信内容，自适应地调整各个子模型的重要性。</p>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseEnsemble">
+                                <span class="model-badge badge-ensemble">Ensemble</span> 模型说明
+                            </button>
+                        </h2>
+                        <div id="collapseEnsemble" class="accordion-collapse collapse" data-bs-parent="#modelAccordion">
+                            <div class="accordion-body">
+                                <p><strong>Attention Ensemble</strong> (注意力集成学习) 是一种高级的模型组合方法，它使用注意力机制动态地为每个子模型分配权重，根据输入文本的特性自适应调整各模型的重要性。这种方法能够在保持高准确率的同时，提高模型的鲁棒性和泛化能力。</p>
+                                <p>核心优势在于：</p>
+                                <ul>
+                                    <li>自适应权重 - 根据短信特征动态调整各子模型的重要性</li>
+                                    <li>更强的鲁棒性 - 多个模型协同工作，减少单一模型的偏差</li>
+                                    <li>更好的泛化能力 - 结合不同类型模型的优势，应对各种文本场景</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseRoberta">
+                                <span class="model-badge badge-roberta">RoBERTa</span> 模型说明
+                            </button>
+                        </h2>
+                        <div id="collapseRoberta" class="accordion-collapse collapse" data-bs-parent="#modelAccordion">
+                            <div class="accordion-body">
+                                <p><strong>RoBERTa</strong> (Robustly Optimized BERT Pretraining Approach) 是对BERT的改进版本，通过更优化的训练方法提高了性能。它在自然语言处理任务中表现优异，特别适合复杂的文本分类任务。</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseBert">
+                                <span class="model-badge badge-bert">BERT</span> 模型说明
+                            </button>
+                        </h2>
+                        <div id="collapseBert" class="accordion-collapse collapse" data-bs-parent="#modelAccordion">
+                            <div class="accordion-body">
+                                <p><strong>BERT</strong> (Bidirectional Encoder Representations from Transformers) 是一种预训练的语言模型，能够理解单词在上下文中的含义。它利用双向训练方法理解文本，能有效捕捉短信内容的语义信息。</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseLstm">
+                                <span class="model-badge badge-lstm">LSTM</span> 模型说明
+                            </button>
+                        </h2>
+                        <div id="collapseLstm" class="accordion-collapse collapse" data-bs-parent="#modelAccordion">
+                            <div class="accordion-body">
+                                <p><strong>LSTM</strong> (Long Short-Term Memory) 是一种特殊的循环神经网络，擅长处理序列数据和长期依赖关系。它能够有效地记忆长序列中的重要信息，适合处理短信这类文本序列。</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseCnn">
+                                <span class="model-badge badge-cnn">CNN</span> 模型说明
+                            </button>
+                        </h2>
+                        <div id="collapseCnn" class="accordion-collapse collapse" data-bs-parent="#modelAccordion">
+                            <div class="accordion-body">
+                                <p><strong>CNN</strong> (卷积神经网络) 通过卷积层提取文本的局部特征。它能够识别短信中的关键词组和短语模式，对于垃圾短信中常见的特征词汇和句式有很好的检测能力。</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSvm">
+                                <span class="model-badge badge-svm">SVM</span> 模型说明
+                            </button>
+                        </h2>
+                        <div id="collapseSvm" class="accordion-collapse collapse" data-bs-parent="#modelAccordion">
+                            <div class="accordion-body">
+                                <p><strong>SVM</strong> (支持向量机) 是一种传统的机器学习算法，通过寻找最佳决策边界来分类数据。它在小样本情况下表现良好，计算效率高，适合作为基准模型。</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseXlnet">
+                                <span class="model-badge badge-xlnet">XLNet</span> 模型说明
+                            </button>
+                        </h2>
+                        <div id="collapseXlnet" class="accordion-collapse collapse" data-bs-parent="#modelAccordion">
+                            <div class="accordion-body">
+                                <p><strong>XLNet</strong> 是一种基于自回归语言模型的预训练方法，结合了自回归语言建模和自编码方法的优点。它通过"置换语言建模"目标优化参数，对上下文信息有更强的理解能力，特别擅长捕捉长文本依赖关系。</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseGpt">
+                                <span class="model-badge badge-gpt">GPT</span> 模型说明
+                            </button>
+                        </h2>
+                        <div id="collapseGpt" class="accordion-collapse collapse" data-bs-parent="#modelAccordion">
+                            <div class="accordion-body">
+                                <p><strong>GPT</strong> (Generative Pre-trained Transformer) 是一种基于Transformer架构的生成式预训练语言模型。它通过大规模无监督学习能够理解和生成自然语言，特别适合理解上下文连贯性，可以有效识别垃圾短信中的语言模式和异常表述。</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAttentionLstm">
+                                <span class="model-badge badge-attention_lstm">Attention LSTM</span> 模型说明
+                            </button>
+                        </h2>
+                        <div id="collapseAttentionLstm" class="accordion-collapse collapse" data-bs-parent="#modelAccordion">
+                            <div class="accordion-body">
+                                <p><strong>Attention LSTM</strong> 在传统LSTM的基础上增加了注意力机制，能够自动关注文本中最重要的部分。它特别适合处理长短信文本，可以精确定位垃圾短信中的关键词和短语，提高分类准确率。</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseNb">
+                                <span class="model-badge badge-naive_bayes">朴素贝叶斯</span> 模型说明
+                            </button>
+                        </h2>
+                        <div id="collapseNb" class="accordion-collapse collapse" data-bs-parent="#modelAccordion">
+                            <div class="accordion-body">
+                                <p><strong>朴素贝叶斯</strong>基于贝叶斯定理和特征条件独立假设，计算高效简单。它在文本分类任务中表现稳定，尤其适合处理垃圾邮件和短信分类问题，是经典的文本分类算法。</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 结束页面内容布局 -->
+                        <form id="train-model-form" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label for="training-file" class="form-label">上传训练数据 (CSV文件)</label>
+                                <input type="file" class="form-control" id="training-file" name="file" accept=".csv" required>
+                                <div class="form-text">CSV文件必须包含文本内容列和标签列（0:正常短信/1:垃圾短信 或 ham/spam）</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="training-model-type" class="form-label">选择模型类型</label>
+                                <select class="form-select" id="training-model-select" name="model_type">
+                                    <option value="roberta">RoBERTa (Transformer类)</option>
+                                    <option value="bert">BERT (Transformer类)</option>
+                                    <option value="lstm">LSTM (循环神经网络)</option>
+                                    <option value="cnn">CNN (卷积神经网络)</option>
+                                    <option value="xlnet">XLNet (Transformer类)</option>
+                                    <option value="gpt">GPT (Transformer类)</option>
+                                    <option value="attention_lstm">Attention LSTM (带注意力机制)</option>
+                                    <option value="svm">SVM (传统机器学习)</option>
+                                    <option value="naive_bayes">朴素贝叶斯 (传统机器学习)</option>
+                                </select>
+                            </div>
+                            
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <label for="epochs" class="form-label">训练轮数</label>
+                                    <input type="number" class="form-control" id="epochs" name="epochs" min="1" max="50" value="10">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="batch-size" class="form-label">批次大小</label>
+                                    <input type="number" class="form-control" id="batch-size" name="batch_size" min="8" max="128" value="32">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="learning-rate" class="form-label">学习率</label>
+                                    <input type="number" class="form-control" id="learning-rate" name="learning_rate" min="0.0001" max="0.1" step="0.0001" value="0.001">
+                                </div>
+                            </div>
+                            
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-success" id="train-button">
+                                    <i class="fas fa-graduation-cap me-2"></i>开始训练模型
+                                </button>
+                            </div>
+                        </form>
+                        
+                        <div class="train-result mt-3 d-none">
+                            <div class="alert alert-success">
+                                <h6 class="alert-heading"><i class="fas fa-check-circle me-2"></i>训练成功!</h6>
+                                <div id="train-result-content"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 右侧 - 已保存模型列表 -->
+                    <div class="col-lg-6">
+                        <h6 class="border-bottom pb-2"><i class="fas fa-save me-2"></i>已保存的模型</h6>
+                        <div id="saved-models-container">
+                            <div class="text-center py-5" id="models-loading">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">加载中...</span>
+                                </div>
+                                <p class="mt-2">正在加载模型列表...</p>
+                            </div>
+                            
+                            <div id="saved-models-list" class="d-none">
+                                <!-- 模型列表将通过JS动态填充 -->
+                                <div class="accordion" id="savedModelsAccordion">
+                                    <!-- 动态填充内容 -->
+                                </div>
+                            </div>
+                            
+                            <div id="no-models-message" class="text-center py-4 d-none">
+                                <i class="fas fa-exclamation-circle text-muted mb-2" style="font-size: 2rem;"></i>
+                                <p>暂无已保存的模型。请上传数据集并训练模型。</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

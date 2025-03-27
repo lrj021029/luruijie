@@ -49,10 +49,22 @@ function initEventListeners() {
     const themeSwitcher = document.getElementById('theme-switcher');
     if (themeSwitcher) {
         themeSwitcher.addEventListener('click', toggleTheme);
-        // 根据存储的主题设置初始状态
-        const currentTheme = localStorage.getItem('theme') || 'dark';
+        // 根据存储的主题设置初始状态，默认为light
+        const currentTheme = localStorage.getItem('theme') || 'light';
         document.documentElement.setAttribute('data-bs-theme', currentTheme);
         themeSwitcher.textContent = currentTheme === 'dark' ? '🌙' : '☀️';
+        
+        // 更新导航栏样式
+        const navbar = document.querySelector('.navbar');
+        if (navbar) {
+            if (currentTheme === 'dark') {
+                navbar.classList.remove('navbar-light', 'bg-light');
+                navbar.classList.add('navbar-dark', 'bg-dark');
+            } else {
+                navbar.classList.remove('navbar-dark', 'bg-dark');
+                navbar.classList.add('navbar-light', 'bg-light');
+            }
+        }
     }
 }
 
@@ -623,8 +635,12 @@ async function updateDriftChart() {
     if (!window.driftChart) return;
     
     try {
-        // 发送请求到后端API
-        const response = await fetch('/track_drift');
+        // 获取当前选择的模型类型
+        const modelSelect = document.getElementById('model-select');
+        const modelType = modelSelect ? modelSelect.value : 'roberta';
+        
+        // 发送请求到后端API，包含当前选择的模型类型
+        const response = await fetch(`/track_drift?model_type=${modelType}`);
         
         if (!response.ok) {
             console.error('获取漂移数据失败');
@@ -648,7 +664,7 @@ async function updateDriftChart() {
         chart.update();
         
         // 更新漂移警告
-        updateDriftWarning(data.drift_value);
+        updateDriftWarning(data.drift_value, data.is_adapted, data.model_type);
         
     } catch (error) {
         console.error('更新漂移图表错误:', error);
@@ -656,12 +672,20 @@ async function updateDriftChart() {
 }
 
 // 更新漂移警告
-function updateDriftWarning(driftValue) {
+function updateDriftWarning(driftValue, isAdapted, modelType) {
     const warningContainer = document.getElementById('drift-warning');
     if (!warningContainer) return;
     
     // 清空容器
     warningContainer.innerHTML = '';
+    
+    // 微调信息
+    const adaptationInfo = isAdapted 
+        ? `<div class="mt-2 alert alert-info">
+            <i class="fas fa-sync-alt"></i> 
+            <strong>模型已自动微调!</strong> ${modelType} 模型已基于最新数据进行了自动微调。
+           </div>`
+        : '';
     
     // 根据漂移值显示不同警告
     if (driftValue > 0.5) {
@@ -669,8 +693,9 @@ function updateDriftWarning(driftValue) {
             <div class="alert alert-danger">
                 <i class="fas fa-exclamation-triangle"></i> 
                 <strong>高漂移警告!</strong> 当前漂移值: ${driftValue.toFixed(3)}
-                <p class="mb-0">检测到显著的语义漂移，模型可能需要重新训练。</p>
+                <p class="mb-0">检测到显著的语义漂移，系统将尝试自动微调模型。</p>
             </div>
+            ${adaptationInfo}
         `;
     } else if (driftValue > 0.3) {
         warningContainer.innerHTML = `
@@ -679,6 +704,7 @@ function updateDriftWarning(driftValue) {
                 <strong>中等漂移!</strong> 当前漂移值: ${driftValue.toFixed(3)}
                 <p class="mb-0">检测到中等程度的语义漂移，建议关注模型性能。</p>
             </div>
+            ${adaptationInfo}
         `;
     } else {
         warningContainer.innerHTML = `
@@ -687,6 +713,7 @@ function updateDriftWarning(driftValue) {
                 <strong>稳定!</strong> 当前漂移值: ${driftValue.toFixed(3)}
                 <p class="mb-0">未检测到明显语义漂移，模型表现稳定。</p>
             </div>
+            ${adaptationInfo}
         `;
     }
 }
@@ -695,14 +722,29 @@ function updateDriftWarning(driftValue) {
 function toggleTheme() {
     const themeSwitcher = document.getElementById('theme-switcher');
     const currentTheme = document.documentElement.getAttribute('data-bs-theme');
+    const navbar = document.querySelector('.navbar');
     
     if (currentTheme === 'dark') {
+        // 切换到亮色模式
         document.documentElement.setAttribute('data-bs-theme', 'light');
         themeSwitcher.textContent = '☀️';
         localStorage.setItem('theme', 'light');
+        
+        // 更新导航栏样式
+        if (navbar) {
+            navbar.classList.remove('navbar-dark', 'bg-dark');
+            navbar.classList.add('navbar-light', 'bg-light');
+        }
     } else {
+        // 切换到暗色模式
         document.documentElement.setAttribute('data-bs-theme', 'dark');
         themeSwitcher.textContent = '🌙';
         localStorage.setItem('theme', 'dark');
+        
+        // 更新导航栏样式
+        if (navbar) {
+            navbar.classList.remove('navbar-light', 'bg-light');
+            navbar.classList.add('navbar-dark', 'bg-dark');
+        }
     }
 }

@@ -126,11 +126,42 @@
 .footer {
     margin-top: 2rem;
     padding: 1.5rem 0;
-    background-color: var(--dark-color);
     color: white;
 }
 
+/* 亮色模式调整 */
+[data-bs-theme="light"] {
+    --bs-body-bg: #ffffff;
+    --bs-body-color: #212529;
+}
+
+[data-bs-theme="light"] .footer {
+    background-color: #343a40;
+}
+
+[data-bs-theme="light"] .card {
+    background-color: #ffffff;
+}
+
+[data-bs-theme="light"] .wordcloud-container,
+[data-bs-theme="light"] .chart-container {
+    background-color: rgba(0, 0, 0, 0.03);
+}
+
+[data-bs-theme="light"] .table-hover tbody tr:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
 /* 暗色模式调整 */
+[data-bs-theme="dark"] {
+    --bs-body-bg: #212529;
+    --bs-body-color: #f8f9fa;
+}
+
+[data-bs-theme="dark"] .footer {
+    background-color: #1a1d20;
+}
+
 [data-bs-theme="dark"] .card {
     background-color: #2b3035;
 }

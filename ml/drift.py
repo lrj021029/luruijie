@@ -1,6 +1,7 @@
 import numpy as np
 import logging
 import importlib.util
+import traceback
 from datetime import datetime
 from ml.preprocessing import clean_text
 from ml.feature_extraction import extract_features
@@ -152,7 +153,88 @@ def kl_divergence(mu1, logvar1, mu2, logvar2):
         logging.error(f"KL散度计算错误: {str(e)}")
         return 0.0
 
-def detect_drift(texts, reference_texts=None, tokenizer=None):
+def adapt_model(model, features, model_type):
+    """
+    根据当前数据进行模型在线微调
+    
+    参数:
+        model: 待微调的模型
+        features: 特征数据
+        model_type: 模型类型
+    
+    返回:
+        success: 微调是否成功
+    """
+    if not HAS_TORCH or model is None:
+        return False
+        
+    try:
+        logging.info(f"开始对{model_type}模型进行在线微调...")
+        
+        # 转换特征为张量
+        features_tensor = torch.FloatTensor(features)
+        
+        # 生成伪标签 - 在实际应用中，这里应该使用更复杂的策略，
+        # 比如使用聚类、半监督学习、或者专家知识
+        # 这里为了演示，使用当前模型的预测结果作为伪标签
+        with torch.no_grad():
+            model.eval()
+            outputs = []
+            
+            # 分批处理特征，避免内存不足
+            batch_size = 32
+            for i in range(0, len(features_tensor), batch_size):
+                batch = features_tensor[i:i+batch_size]
+                output = model(batch)
+                outputs.append(output)
+                
+            outputs = torch.cat(outputs, dim=0)
+            pseudo_labels = (torch.sigmoid(outputs) > 0.5).float()
+        
+        # 准备优化器和损失函数
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
+        criterion = torch.nn.BCEWithLogitsLoss()
+        
+        # 进入训练模式
+        model.train()
+        
+        # 进行少量训练步骤的在线微调
+        epochs = 3
+        for epoch in range(epochs):
+            epoch_loss = 0.0
+            
+            # 分批进行训练
+            for i in range(0, len(features_tensor), batch_size):
+                batch_features = features_tensor[i:i+batch_size]
+                batch_labels = pseudo_labels[i:i+batch_size]
+                
+                # 前向传播
+                outputs = model(batch_features)
+                loss = criterion(outputs, batch_labels)
+                
+                # 反向传播和优化
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                
+                epoch_loss += loss.item()
+            
+            avg_loss = epoch_loss / (len(features_tensor) / batch_size)
+            logging.info(f"微调 Epoch {epoch+1}/{epochs}, Loss: {avg_loss:.4f}")
+        
+        # 恢复为评估模式
+        model.eval()
+        
+        logging.info(f"{model_type}模型在线微调完成")
+        return True
+        
+    except Exception as e:
+        logging.error(f"模型在线微调失败: {str(e)}")
+        traceback_str = traceback.format_exc()
+        logging.error(traceback_str)
+        return False
+
+def detect_drift(texts, reference_texts=None, tokenizer=None, model=None, model_type=None):
     """
     检测语义漂移
     
@@ -160,23 +242,28 @@ def detect_drift(texts, reference_texts=None, tokenizer=None):
         texts: 当前文本列表
         reference_texts: 参考文本列表（若为None，则返回默认值）
         tokenizer: 可选的tokenizer
+        model: 可选的分类器模型，用于微调
+        model_type: 模型类型
     
     返回:
         drift_value: 漂移值，越大表示漂移越严重
+        is_adapted: 是否触发了模型微调
     """
     try:
+        is_adapted = False
+        
         # 如果没有PyTorch或没有参考文本，返回默认漂移值
         if not HAS_TORCH or reference_texts is None or len(reference_texts) < 10:
             # 使用文本特征的hash生成一个伪随机值，保证相同输入的输出一致
             seed = hash(str(texts) + str(reference_texts)) % 10000
             np.random.seed(seed)
-            return np.random.uniform(0.1, 0.3)  # 返回一个较小的随机漂移值
+            return np.random.uniform(0.1, 0.3), is_adapted  # 返回一个较小的随机漂移值
             
         # 获取VAE模型
         vae = get_vae_model()
         
         if vae is None:
-            return 0.0
+            return 0.0, is_adapted
         
         vae.eval()
         
@@ -206,8 +293,17 @@ def detect_drift(texts, reference_texts=None, tokenizer=None):
         # 归一化漂移值到[0,1]范围
         normalized_drift = min(drift_value / 10.0, 1.0)
         
-        return normalized_drift
+        # 如果漂移值大于阈值且分类器模型可用，则对模型进行在线微调
+        if normalized_drift > 0.5 and model is not None and HAS_TORCH:
+            logging.info(f"检测到显著漂移（{normalized_drift}），开始对模型进行在线微调")
+            is_adapted = adapt_model(model, current_features, model_type)
+            if is_adapted:
+                logging.info("模型在线微调成功")
+            else:
+                logging.warning("模型在线微调失败")
+        
+        return normalized_drift, is_adapted
     
     except Exception as e:
         logging.error(f"漂移检测错误: {str(e)}")
-        return 0.0
+        return 0.0, False

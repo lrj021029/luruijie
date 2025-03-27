@@ -153,11 +153,18 @@ def upload_file():
         # 读取CSV
         df = pd.read_csv(filepath)
         
-        # 检查必要的列
-        required_columns = ['text', 'send_freq', 'is_night']
-        if not all(col in df.columns for col in required_columns):
-            flash('CSV文件格式错误，必须包含 text, send_freq, is_night 列', 'danger')
+        # 检查必要的列 - 只有text是必须的
+        if 'text' not in df.columns:
+            flash('CSV文件格式错误，必须包含 text 列', 'danger')
             return redirect(url_for('index'))
+            
+        # 如果没有send_freq列，添加默认值0.0
+        if 'send_freq' not in df.columns:
+            df['send_freq'] = 0.0
+            
+        # 如果没有is_night列，添加默认值0
+        if 'is_night' not in df.columns:
+            df['is_night'] = 0
         
         # 处理每一行
         model_type = request.form.get('model_type', 'roberta')
@@ -290,7 +297,7 @@ def get_history():
 
 @app.route('/track_drift')
 def track_drift():
-    """获取语义漂移检测数据"""
+    """获取语义漂移检测数据（包含模型微调功能）"""
     try:
         # 获取最近的消息用于漂移检测
         recent_messages = SMSMessage.query.order_by(SMSMessage.timestamp.desc()).limit(100).all()
@@ -298,12 +305,28 @@ def track_drift():
         if len(recent_messages) < 10:
             return jsonify({'error': '数据不足，无法进行漂移检测'}), 400
         
-        # 进行漂移检测
-        drift_value = drift.detect_drift([msg.text for msg in recent_messages])
+        # 获取当前模型类型（默认使用 roberta）
+        current_model_type = request.args.get('model_type', 'roberta')
+        if current_model_type not in models:
+            current_model_type = 'roberta'
+            
+        # 获取最近1000条消息作为参考数据集（历史数据）
+        reference_messages = SMSMessage.query.order_by(SMSMessage.timestamp).limit(1000).all()
         
-        # 返回漂移值
+        # 进行漂移检测和模型微调
+        drift_value, is_adapted = drift.detect_drift(
+            [msg.text for msg in recent_messages],
+            [msg.text for msg in reference_messages] if len(reference_messages) >= 10 else None,
+            tokenizers.get(current_model_type),
+            models.get(current_model_type),
+            current_model_type
+        )
+        
+        # 返回漂移值和微调状态
         return jsonify({
             'drift_value': float(drift_value),
+            'is_adapted': is_adapted,
+            'model_type': current_model_type,
             'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         })
     

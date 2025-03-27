@@ -470,10 +470,15 @@ def predict(model, features, model_type):
             r'\.net', # .net域名
             r'click.*link', # 点击链接
             r'click.*here', # 点击这里
+            r'movie.*club', # 电影俱乐部
+            r'xxx', # 成人内容
             r'credit', # 信用卡
+            r'use.*credit', # 使用信用卡
+            r'to\s+use\s+your', # 使用您的...
             r'点击.*链接', # 中文点击链接
             r'点此.*进入', # 中文点此进入
             r'链接.*访问', # 中文链接访问
+            r'next.*txt.*message', # 下一条短信
         ]
         
         # 强制规则匹配检查
@@ -768,11 +773,18 @@ def predict(model, features, model_type):
             r'赠送.*积分', # 中文赠送积分
             r'service', # 服务
             r'account', # 账户
+            r'credit', # 信用
+            r'use your', # 使用你的
+            r'click', # 点击
+            r'link', # 链接
             r'subscribe', # 订阅
             r'unsubscribe', # 取消订阅
             r'club', # 俱乐部
             r'movie', # 电影
+            r'xxx', # 成人内容
             r'txt message', # 文本消息
+            r'next', # 下一个
+            r'wap', # WAP链接
         ]
         
         # 检查次要垃圾短信模式
@@ -783,9 +795,13 @@ def predict(model, features, model_type):
                 logging.info(f"次要垃圾规则匹配: '{pattern}'")
         
         # 如果匹配了多个次要模式，提高垃圾短信评分
-        if obvious_spam_matches >= 2:
+        if obvious_spam_matches >= 3:
+            # 至少匹配3个次要模式，几乎确定是垃圾短信
+            final_spam_score = max(0.98, final_spam_score)
+            logging.info(f"检测到多个次要垃圾短信模式: {obvious_spam_matches}个匹配，提升评分到{final_spam_score:.2f}")
+        elif obvious_spam_matches >= 2:
             # 至少匹配2个次要模式，大幅提高垃圾短信评分
-            final_spam_score = max(0.9, final_spam_score)
+            final_spam_score = max(0.92, final_spam_score)
             logging.info(f"检测到多个次要垃圾短信模式: {obvious_spam_matches}个匹配，提升评分到{final_spam_score:.2f}")
         elif obvious_spam_matches == 1:
             # 匹配1个次要模式，适当提高垃圾短信评分

@@ -164,16 +164,18 @@
     
     // 页面加载时获取数据集列表
     document.addEventListener('DOMContentLoaded', function() {
-        // 初始化全局AppState对象（如果不存在）
-        if (!window.AppState && typeof AppState === 'function') {
-            window.AppState = new AppState();
-            window.AppState.init();
-            console.log('在数据集页面初始化AppState');
+        // 先尝试恢复页面状态
+        if (typeof restorePageState === 'function') {
+            restorePageState('datasets');
         }
         
         loadDatasets()
             .then(() => {
                 console.log('数据集加载完成');
+                // 保存页面状态
+                if (typeof saveCurrentPageState === 'function') {
+                    saveCurrentPageState('datasets');
+                }
             })
             .catch(error => {
                 console.error('数据集加载失败:', error);
@@ -217,6 +219,23 @@
         const noDatasetsAlert = document.getElementById('no-datasets');
         const datasetsTableBody = document.getElementById('datasets-table-body');
         
+        // 避免重复加载
+        if (loadingDatasets && !forceReload) {
+            console.log('数据集加载中，跳过请求');
+            return;
+        }
+        
+        // 检查是否可以使用缓存
+        const now = Date.now();
+        if (!forceReload && window.cachedDatasetsData && (now - lastDatasetLoad < 60000)) {
+            console.log('使用缓存的数据集数据');
+            renderDatasetsList(window.cachedDatasetsData);
+            return;
+        }
+        
+        // 设置加载状态
+        loadingDatasets = true;
+        
         // 显示加载指示器
         datasetsLoading.classList.remove('d-none');
         datasetsList.classList.add('d-none');
@@ -232,57 +251,16 @@
             
             const data = await response.json();
             
-            // 清空表格
-            datasetsTableBody.innerHTML = '';
+            // 更新缓存和时间戳
+            window.cachedDatasetsData = data;
+            lastDatasetLoad = Date.now();
             
-            // 处理数据
-            if (data.success && data.datasets && data.datasets.length > 0) {
-                // 显示数据集列表
-                data.datasets.forEach(dataset => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${dataset.name}</td>
-                        <td>${dataset.filename}</td>
-                        <td>${dataset.description || '-'}</td>
-                        <td>${dataset.total_records}</td>
-                        <td>${dataset.spam_count}</td>
-                        <td>${dataset.ham_count}</td>
-                        <td>${dataset.upload_time}</td>
-                        <td>
-                            <div class="btn-group btn-group-sm" role="group">
-                                <button type="button" class="btn btn-primary use-dataset-btn" data-dataset-id="${dataset.id}" data-dataset-name="${dataset.name}">
-                                    <i class="fas fa-play"></i>
-                                </button>
-                                <button type="button" class="btn btn-danger delete-dataset-btn" data-dataset-id="${dataset.id}" data-dataset-name="${dataset.name}">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </div>
-                        </td>
-                    `;
-                    datasetsTableBody.appendChild(row);
-                });
-                
-                // 添加删除和使用按钮事件
-                document.querySelectorAll('.delete-dataset-btn').forEach(btn => {
-                    btn.addEventListener('click', function() {
-                        const datasetId = this.dataset.datasetId;
-                        const datasetName = this.dataset.datasetName;
-                        showDeleteConfirmation(datasetId, datasetName);
-                    });
-                });
-                
-                document.querySelectorAll('.use-dataset-btn').forEach(btn => {
-                    btn.addEventListener('click', function() {
-                        const datasetId = this.dataset.datasetId;
-                        const datasetName = this.dataset.datasetName;
-                        showUseDatasetModal(datasetId, datasetName);
-                    });
-                });
-                
-                datasetsList.classList.remove('d-none');
-            } else {
-                // 显示无数据集提示
-                noDatasetsAlert.classList.remove('d-none');
+            // 渲染数据集列表
+            renderDatasetsList(data);
+            
+            // 保存页面状态
+            if (typeof saveCurrentPageState === 'function') {
+                saveCurrentPageState('datasets');
             }
         } catch (error) {
             console.error('加载数据集列表错误:', error);
@@ -302,6 +280,69 @@
         } finally {
             // 隐藏加载指示器
             datasetsLoading.classList.add('d-none');
+            loadingDatasets = false;
+        }
+    }
+    
+    // 渲染数据集列表
+    function renderDatasetsList(data) {
+        const datasetsList = document.getElementById('datasets-list');
+        const noDatasetsAlert = document.getElementById('no-datasets');
+        const datasetsTableBody = document.getElementById('datasets-table-body');
+        
+        // 清空表格
+        datasetsTableBody.innerHTML = '';
+        
+        // 处理数据
+        if (data.success && data.datasets && data.datasets.length > 0) {
+            // 显示数据集列表
+            data.datasets.forEach(dataset => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${dataset.name}</td>
+                    <td>${dataset.filename}</td>
+                    <td>${dataset.description || '-'}</td>
+                    <td>${dataset.total_records}</td>
+                    <td>${dataset.spam_count}</td>
+                    <td>${dataset.ham_count}</td>
+                    <td>${dataset.upload_time}</td>
+                    <td>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="button" class="btn btn-primary use-dataset-btn" data-dataset-id="${dataset.id}" data-dataset-name="${dataset.name}">
+                                <i class="fas fa-play"></i>
+                            </button>
+                            <button type="button" class="btn btn-danger delete-dataset-btn" data-dataset-id="${dataset.id}" data-dataset-name="${dataset.name}">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                datasetsTableBody.appendChild(row);
+            });
+            
+            // 添加删除和使用按钮事件
+            document.querySelectorAll('.delete-dataset-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const datasetId = this.dataset.datasetId;
+                    const datasetName = this.dataset.datasetName;
+                    showDeleteConfirmation(datasetId, datasetName);
+                });
+            });
+            
+            document.querySelectorAll('.use-dataset-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const datasetId = this.dataset.datasetId;
+                    const datasetName = this.dataset.datasetName;
+                    showUseDatasetModal(datasetId, datasetName);
+                });
+            });
+            
+            datasetsList.classList.remove('d-none');
+            noDatasetsAlert.classList.add('d-none');
+        } else {
+            // 显示无数据集提示
+            noDatasetsAlert.classList.remove('d-none');
+            datasetsList.classList.add('d-none');
         }
     }
     

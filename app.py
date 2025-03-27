@@ -1089,7 +1089,44 @@ def delete_model():
 @app.route('/datasets')
 def datasets():
     """显示数据集管理页面"""
-    return render_template('datasets.html')
+    # 直接从文件系统获取CSV文件列表
+    dataset_files = []
+    
+    try:
+        # 获取uploads目录下的所有CSV文件
+        csv_files = [f for f in os.listdir('uploads') if f.endswith('.csv')]
+        
+        for csv_file in csv_files:
+            file_path = os.path.join('uploads', csv_file)
+            file_size = os.path.getsize(file_path)
+            file_size_readable = f"{file_size / 1024:.1f} KB"
+            
+            # 检查文件内容（读取前5行以获取大致内容）
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                lines = [line.strip() for line in f.readlines()[:5]]
+                
+            # 统计行数
+            line_count = 0
+            try:
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    for _ in f:
+                        line_count += 1
+            except:
+                pass
+                
+            dataset_files.append({
+                'filename': csv_file,
+                'path': file_path,
+                'size': file_size_readable,
+                'lines': line_count,
+                'preview': lines
+            })
+        
+    except Exception as e:
+        logging.error(f"读取CSV文件错误: {str(e)}")
+        logging.error(traceback.format_exc())
+    
+    return render_template('datasets.html', dataset_files=dataset_files)
 
 @app.route('/get_datasets')
 def get_datasets():
@@ -1242,7 +1279,7 @@ def delete_dataset(dataset_id):
 
 @app.route('/use_dataset/<int:dataset_id>', methods=['POST'])
 def use_dataset(dataset_id):
-    """使用数据集训练模型或进行预测"""
+    """使用数据集训练模型或进行预测（通过数据库ID）"""
     try:
         dataset = Dataset.query.get_or_404(dataset_id)
         
@@ -1285,6 +1322,149 @@ def use_dataset(dataset_id):
         logging.error(f"使用数据集错误: {str(e)}")
         logging.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
+        
+@app.route('/use_csv_file', methods=['POST'])
+def use_csv_file():
+    """直接使用CSV文件进行训练或预测（通过文件路径）"""
+    try:
+        # 获取请求数据
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': '无效的请求数据'}), 400
+            
+        file_path = data.get('file_path')
+        action = data.get('action', 'predict')
+        model_type = data.get('model_type', '')
+        
+        # 参数验证
+        if not file_path:
+            return jsonify({'error': '未提供文件路径'}), 400
+            
+        if not model_type:
+            return jsonify({'error': '未提供模型类型'}), 400
+            
+        # 检查文件是否存在
+        if not os.path.exists(file_path):
+            return jsonify({'error': f'文件不存在: {file_path}'}), 400
+            
+        # 尝试多种编码读取CSV文件
+        encodings = ['utf-8', 'latin1', 'gbk', 'gb2312', 'cp1252']
+        df = None
+        for encoding in encodings:
+            try:
+                df = pd.read_csv(file_path, encoding=encoding)
+                break
+            except Exception as e:
+                logging.error(f"尝试使用{encoding}编码读取失败: {str(e)}")
+                if encoding == encodings[-1]:  # 最后一个编码尝试也失败
+                    return jsonify({'error': '无法读取CSV文件，请检查编码格式'}), 400
+        
+        # 根据操作类型处理
+        if action == 'train':
+            # 尝试查找标签列
+            possible_label_columns = ['label', 'class', 'category', 'spam', 'is_spam', '标签', '分类', '垃圾']
+            label_column = None
+            
+            for col in df.columns:
+                if col.lower() in possible_label_columns:
+                    label_column = col
+                    break
+            
+            if not label_column:
+                return jsonify({'error': '无法识别标签列，请检查CSV文件格式'}), 400
+                
+            # 查找文本列
+            possible_text_columns = ['text', 'content', 'message', 'sms', '文本', '内容', '短信', '消息']
+            text_column = None
+            
+            for col in df.columns:
+                if col.lower() in possible_text_columns:
+                    text_column = col
+                    break
+                    
+            if not text_column:
+                # 如果只有两列，且其中一列是标签列，另一列就是文本列
+                if len(df.columns) == 2:
+                    text_column = [col for col in df.columns if col != label_column][0]
+                else:
+                    return jsonify({'error': '无法识别文本列，请检查CSV文件格式'}), 400
+            
+            # 将标签转换为数值型 (0: 正常短信, 1: 垃圾短信)
+            labels = []
+            for label in df[label_column]:
+                label_str = str(label).lower().strip()
+                if label_str in ['spam', '1', 'true', 'yes', '垃圾', '垃圾短信']:
+                    labels.append(1)
+                elif label_str in ['ham', '0', 'false', 'no', '正常', '正常短信']:
+                    labels.append(0)
+                else:
+                    # 未知标签，默认为正常短信
+                    labels.append(0)
+            
+            # 获取文本数据
+            texts = df[text_column].fillna('').astype(str).tolist()
+            
+            # 检查数据条数
+            if len(texts) != len(labels):
+                return jsonify({'error': '文本和标签数量不匹配'}), 400
+                
+            if len(texts) == 0:
+                return jsonify({'error': 'CSV文件中没有有效数据'}), 400
+                
+            # 导入训练模块
+            from ml.training import train_model
+            from ml.model import load_model
+            from ml.feature_extraction import get_tokenizer
+            
+            # 加载模型和tokenizer
+            model, tokenizer = load_model(model_type)
+            
+            # 训练模型
+            try:
+                # 使用时间戳命名保存的模型文件
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                model_save_path = os.path.join('ml/saved_models', f'{model_type}_{timestamp}.pt')
+                
+                # 确保保存目录存在
+                os.makedirs(os.path.dirname(model_save_path), exist_ok=True)
+                
+                # 训练模型并保存
+                model, metrics = train_model(
+                    model=model,
+                    features=texts,  # 直接传递文本，在训练函数中提取特征
+                    labels=labels,
+                    model_type=model_type,
+                    model_save_path=model_save_path,
+                    epochs=5,  # 默认训练5轮
+                    batch_size=32,
+                    learning_rate=0.001
+                )
+                
+                # 返回训练结果
+                return jsonify({
+                    'success': True,
+                    'message': f'{model_type}模型训练完成',
+                    'metrics': metrics,
+                    'model_path': model_save_path
+                })
+                
+            except Exception as e:
+                logging.error(f"模型训练错误: {str(e)}")
+                logging.error(traceback.format_exc())
+                return jsonify({'error': f'模型训练失败: {str(e)}'}), 500
+                
+        elif action == 'predict':
+            # 预测逻辑
+            return jsonify({'success': True, 'message': '预测功能尚未实现'})
+            
+        else:
+            return jsonify({'error': '无效的操作类型'}), 400
+            
+    except Exception as e:
+        logging.error(f"使用CSV文件错误: {str(e)}")
+        logging.error(traceback.format_exc())
+        return jsonify({'error': f'处理失败: {str(e)}'}), 500
 
 # 启动应用时创建表
 with app.app_context():

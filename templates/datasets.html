@@ -50,41 +50,55 @@
             <div class="card shadow-sm">
                 <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
                     <h5 class="mb-0"><i class="fas fa-list me-2"></i>已上传数据集</h5>
-                    <button class="btn btn-sm btn-outline-light" id="refresh-datasets-btn">
+                    <a href="/datasets" class="btn btn-sm btn-outline-light">
                         <i class="fas fa-sync-alt me-1"></i>刷新
-                    </button>
+                    </a>
                 </div>
                 <div class="card-body">
-                    <div id="datasets-loading" class="text-center py-5">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">加载中...</span>
-                        </div>
-                        <p class="mt-2">加载数据集列表...</p>
-                    </div>
-                    <div id="datasets-list" class="d-none">
+                    {% if dataset_files %}
                         <div class="table-responsive">
                             <table class="table table-striped table-hover">
                                 <thead class="table-dark">
                                     <tr>
-                                        <th>名称</th>
-                                        <th>文件</th>
-                                        <th>描述</th>
-                                        <th>记录数</th>
-                                        <th>垃圾短信</th>
-                                        <th>正常短信</th>
-                                        <th>上传时间</th>
+                                        <th>文件名</th>
+                                        <th>文件大小</th>
+                                        <th>行数</th>
+                                        <th>预览内容</th>
                                         <th>操作</th>
                                     </tr>
                                 </thead>
-                                <tbody id="datasets-table-body">
-                                    <!-- 数据集列表将通过JS填充 -->
+                                <tbody>
+                                    {% for file in dataset_files %}
+                                    <tr>
+                                        <td>{{ file.filename }}</td>
+                                        <td>{{ file.size }}</td>
+                                        <td>{{ file.lines }}</td>
+                                        <td>
+                                            <div style="max-height:100px; overflow-y:auto;">
+                                                {% for line in file.preview %}
+                                                <div class="small text-muted">{{ line }}</div>
+                                                {% endfor %}
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm" role="group">
+                                                <button type="button" class="btn btn-primary use-dataset-btn"
+                                                        data-dataset-name="{{ file.filename }}"
+                                                        data-dataset-path="{{ file.path }}">
+                                                    <i class="fas fa-play"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
                                 </tbody>
                             </table>
                         </div>
-                    </div>
-                    <div id="no-datasets" class="alert alert-info text-center d-none">
-                        <i class="fas fa-info-circle me-2"></i>暂无上传的数据集，请上传新数据集
-                    </div>
+                    {% else %}
+                        <div class="alert alert-info text-center">
+                            <i class="fas fa-info-circle me-2"></i>暂无上传的数据集，请上传新数据集
+                        </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -158,28 +172,19 @@
 
 {% block scripts %}
 <script>
-    // 全局变量和工具函数
-    let loadingDatasets = false;
-    let lastDatasetLoad = 0;
-    
-    // 页面加载时获取数据集列表
+    // 页面加载时初始化事件监听
     document.addEventListener('DOMContentLoaded', function() {
         // 先尝试恢复页面状态
         if (typeof restorePageState === 'function') {
             restorePageState('datasets');
         }
         
-        loadDatasets()
-            .then(() => {
-                console.log('数据集加载完成');
-                // 保存页面状态
-                if (typeof saveCurrentPageState === 'function') {
-                    saveCurrentPageState('datasets');
-                }
-            })
-            .catch(error => {
-                console.error('数据集加载失败:', error);
-            });
+        console.log('数据集页面初始化完成');
+        
+        // 保存页面状态
+        if (typeof saveCurrentPageState === 'function') {
+            saveCurrentPageState('datasets');
+        }
         
         // 设置表单提交事件
         const datasetUploadForm = document.getElementById('dataset-upload-form');
@@ -187,23 +192,14 @@
             datasetUploadForm.addEventListener('submit', handleDatasetUpload);
         }
         
-        // 设置刷新按钮事件
-        const refreshDatasetsBtn = document.getElementById('refresh-datasets-btn');
-        if (refreshDatasetsBtn) {
-            refreshDatasetsBtn.addEventListener('click', function() {
-                loadDatasets(true)
-                    .then(() => {
-                        showToast('success', '刷新成功', '数据集列表已更新');
-                    })
-                    .catch(() => {});
+        // 设置使用数据集按钮事件
+        document.querySelectorAll('.use-dataset-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const datasetName = this.dataset.datasetName;
+                const datasetPath = this.dataset.datasetPath;
+                showUseDatasetModal(datasetName, datasetPath);
             });
-        }
-        
-        // 设置确认删除按钮事件
-        const confirmDeleteBtn = document.getElementById('confirm-delete-dataset-btn');
-        if (confirmDeleteBtn) {
-            confirmDeleteBtn.addEventListener('click', confirmDeleteDataset);
-        }
+        });
         
         // 设置确认使用数据集按钮事件
         const confirmUseBtn = document.getElementById('confirm-use-dataset-btn');
@@ -454,13 +450,23 @@
     }
     
     // 显示使用数据集模态框
-    function showUseDatasetModal(datasetId, datasetName) {
+    function showUseDatasetModal(datasetName, datasetPath) {
         const modal = document.getElementById('use-dataset-modal');
         const titleElem = document.getElementById('useDatasetModalLabel');
         const idInput = document.getElementById('use-dataset-id');
+        const pathInput = document.getElementById('use-dataset-path') || document.createElement('input');
+        
+        // 如果路径输入框不存在，创建一个
+        if (!document.getElementById('use-dataset-path')) {
+            pathInput.id = 'use-dataset-path';
+            pathInput.type = 'hidden';
+            pathInput.name = 'dataset_path';
+            document.getElementById('use-dataset-form').appendChild(pathInput);
+        }
         
         titleElem.textContent = `使用数据集: ${datasetName}`;
-        idInput.value = datasetId;
+        idInput.value = ''; // 不再使用ID
+        pathInput.value = datasetPath;
         
         // 显示模态框
         const bsModal = new bootstrap.Modal(modal);
@@ -471,7 +477,7 @@
     async function confirmUseDataset() {
         const form = document.getElementById('use-dataset-form');
         const formData = new FormData(form);
-        const datasetId = formData.get('dataset_id');
+        const datasetPath = formData.get('dataset_path');
         const action = formData.get('action');
         const modelType = formData.get('model_type');
         
@@ -490,10 +496,17 @@
         confirmBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>处理中...';
         
         try {
-            // 发送请求
-            const response = await fetch(`/use_dataset/${datasetId}`, {
+            // 发送请求，使用新的文件系统直接处理端点
+            const response = await fetch('/use_csv_file', {
                 method: 'POST',
-                body: formData
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    file_path: datasetPath,
+                    action: action,
+                    model_type: modelType
+                })
             });
             
             const data = await response.json();
@@ -507,7 +520,7 @@
                 
                 // 如果是训练操作，可能需要重新加载模型列表
                 if (action === 'train') {
-                    // 这里可以添加刷新模型列表的代码
+                    window.location.href = '/'; // 暂时跳转到主页
                 }
             } else {
                 // 显示错误提示

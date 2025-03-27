@@ -526,8 +526,8 @@ async function deleteRecord(recordId) {
             throw new Error(data.message || '删除记录失败');
         }
         
-        // 重新加载历史记录
-        await loadHistory();
+        // 重新加载历史记录，强制刷新数据
+        await loadHistory(true);
         
         // 显示成功消息
         showToast('success', '删除成功', '记录已成功删除');
@@ -565,8 +565,8 @@ async function deleteSelectedRecords() {
             throw new Error(data.message || '删除记录失败');
         }
         
-        // 重新加载历史记录
-        await loadHistory();
+        // 重新加载历史记录，强制刷新数据
+        await loadHistory(true);
         
         // 显示成功消息
         showToast('success', '批量删除成功', `已成功删除 ${ids.length} 条记录`);
@@ -593,8 +593,8 @@ async function deleteAllRecords() {
         const modal = bootstrap.Modal.getInstance(document.getElementById('confirmDeleteAllModal'));
         modal.hide();
         
-        // 重新加载历史记录
-        await loadHistory();
+        // 重新加载历史记录，强制刷新数据
+        await loadHistory(true);
         
         // 显示成功消息
         showToast('success', '清空成功', '已成功删除所有记录');

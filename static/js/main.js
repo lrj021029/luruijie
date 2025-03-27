@@ -769,25 +769,45 @@ async function loadWordCloudData() {
 
 // 渲染词云
 function renderWordCloud(container, words, color) {
-    // 转换数据格式为WordCloud2.js需要的格式 [[word, weight], [word, weight]]
-    const wordList = words.map(item => [item.word, item.value]);
-    
-    // 清空容器
-    container.innerHTML = '';
-    
-    // 添加词云标题和信息显示区域
-    container.innerHTML = '<div class="word-info text-center mb-2">&nbsp;</div>';
-    
-    // 创建词云canvas
-    const canvas = document.createElement('canvas');
-    canvas.width = container.offsetWidth;
-    canvas.height = 300;
-    container.appendChild(canvas);
-    
-    console.log("正在渲染词云，单词数量:", wordList.length);
-    console.log("词云数据示例:", wordList.slice(0, 5));
-    
     try {
+        // 转换数据格式为WordCloud2.js需要的格式 [[word, weight], [word, weight]]
+        const wordList = words.map(item => [item.word, item.value]);
+        
+        console.log("正在渲染词云，单词数量:", wordList.length);
+        console.log("词云数据示例:", wordList.slice(0, 5));
+        
+        // 检查全局WordCloud对象是否存在
+        if (typeof WordCloud === 'undefined') {
+            throw new Error('WordCloud库未加载');
+        }
+        
+        // 清空容器
+        container.innerHTML = '';
+        
+        // 添加词云标题和信息显示区域
+        const infoDiv = document.createElement('div');
+        infoDiv.className = 'word-info text-center mb-2';
+        infoDiv.innerHTML = '&nbsp;';
+        container.appendChild(infoDiv);
+        
+        // 创建词云canvas
+        const canvas = document.createElement('canvas');
+        canvas.width = container.offsetWidth;
+        canvas.height = 300;
+        container.appendChild(canvas);
+        
+        // 确保容器和canvas可见且有实际宽度
+        if (container.offsetWidth === 0) {
+            console.error("词云容器宽度为0，无法正确渲染");
+            throw new Error('容器宽度为0');
+        }
+        
+        // 确保词云有数据
+        if (wordList.length === 0) {
+            console.error("词云数据为空");
+            throw new Error('词云数据为空');
+        }
+        
         // 词云配置
         const options = {
             list: wordList,
@@ -800,16 +820,16 @@ function renderWordCloud(container, words, color) {
             gridSize: 8,
             drawOutOfBound: false,
             hover: function(item, dimension) {
-                if (container.querySelector('.word-info')) {
-                    container.querySelector('.word-info').textContent = `"${item[0]}" 出现 ${item[1]} 次`;
+                try {
+                    const infoElement = container.querySelector('.word-info');
+                    if (infoElement && item && item[0]) {
+                        infoElement.textContent = `"${item[0]}" 出现 ${item[1]} 次`;
+                    }
+                } catch (hoverError) {
+                    console.error("词云hover事件错误:", hoverError);
                 }
             }
         };
-        
-        // 检查全局WordCloud对象是否存在
-        if (typeof WordCloud === 'undefined') {
-            throw new Error('WordCloud库未加载');
-        }
         
         // 渲染词云
         WordCloud(canvas, options);

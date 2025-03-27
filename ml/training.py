@@ -25,7 +25,8 @@ class SMSDataset(Dataset):
         return len(self.labels)
     
     def __getitem__(self, idx):
-        return torch.FloatTensor(self.features[idx]), torch.FloatTensor([self.labels[idx]])
+        # 特征使用FloatTensor，标签使用LongTensor（分类问题需要整数标签）
+        return torch.FloatTensor(self.features[idx]), torch.LongTensor([self.labels[idx]])
 
 def load_data(filepath, text_column='', label_column=''):
     """

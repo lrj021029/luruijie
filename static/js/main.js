@@ -896,95 +896,104 @@ function renderWordCloud(container, words, color) {
 
 // 加载已训练模型列表并填充预测表单下拉菜单
 async function loadTrainedModelsForPrediction() {
-    const modelSelect = document.getElementById('model-select');
-    const uploadModelSelect = document.getElementById('upload-model-select');
-    const detectButton = document.getElementById('detect-button');
-    const uploadButton = document.getElementById('upload-button');
-    const noModelWarning = document.getElementById('no-model-warning');
-    
-    if (!modelSelect) {
-        console.log('模型选择框未找到');
-        return;
-    }
-    
-    try {
-        // 获取已训练模型列表
-        const response = await fetch('/get_models');
-        
-        if (!response.ok) {
-            throw new Error('获取已训练模型列表失败');
-        }
-        
-        const data = await response.json();
-        
-        // 清空现有选项，保留默认选项
-        modelSelect.innerHTML = '<option value="" disabled selected>-- 请先训练模型 --</option>';
-        if (uploadModelSelect) {
-            uploadModelSelect.innerHTML = '<option value="" disabled selected>-- 请先训练模型 --</option>';
-        }
-        
-        // 计算是否有已训练的模型
-        let hasTrainedModels = false;
-        let modelCount = 0;
-        
-        // 检查是否有训练好的模型
-        if (data && data.success && data.models) {
-            // 遍历所有模型类型
-            Object.keys(data.models).forEach(modelType => {
-                const models = data.models[modelType];
-                
-                if (models && models.length > 0) {
-                    hasTrainedModels = true;
-                    
-                    // 遍历当前类型的所有已训练模型
-                    models.forEach(modelInfo => {
-                        modelCount++;
-                        const modelName = getModelDisplayName(modelType);
-                        
-                        // 创建选项
-                        const option = document.createElement('option');
-                        option.value = modelType;
-                        option.textContent = `${modelName} (${modelInfo.date || modelInfo.timestamp})`;
-                        option.dataset.path = modelInfo.filename;
-                        
-                        // 添加到单条预测下拉菜单
-                        modelSelect.appendChild(option.cloneNode(true));
-                        
-                        // 添加到批量预测下拉菜单
-                        if (uploadModelSelect) {
-                            uploadModelSelect.appendChild(option.cloneNode(true));
-                        }
-                    });
-                }
-            });
+    return new Promise(async (resolve, reject) => {
+        try {
+            const modelSelect = document.getElementById('model-select');
+            const uploadModelSelect = document.getElementById('upload-model-select');
+            const detectButton = document.getElementById('detect-button');
+            const uploadButton = document.getElementById('upload-button');
+            const noModelWarning = document.getElementById('no-model-warning');
             
-            // 隐藏警告
-            if (hasTrainedModels) {
-                if (noModelWarning) noModelWarning.style.display = 'none';
-                
-                // 启用检测按钮
-                if (detectButton) detectButton.disabled = false;
-                if (uploadButton) uploadButton.disabled = false;
-                
-                // 如果URL中有模型类型参数，选中对应的选项
-                const urlParams = new URLSearchParams(window.location.search);
-                const modelTypeParam = urlParams.get('model_type');
-                
-                if (modelTypeParam) {
-                    const modelOptions = modelSelect.querySelectorAll(`option[value="${modelTypeParam}"]`);
-                    if (modelOptions && modelOptions.length > 0) {
-                        modelOptions[0].selected = true;
-                    }
+            if (!modelSelect) {
+                console.log('模型选择框未找到');
+                return resolve(false);
+            }
+            
+            // 获取已训练模型列表
+            const response = await fetch('/get_models');
+            
+            if (!response.ok) {
+                throw new Error('获取已训练模型列表失败');
+            }
+            
+            const data = await response.json();
+            
+            // 清空现有选项，保留默认选项
+            modelSelect.innerHTML = '<option value="" disabled selected>-- 请先训练模型 --</option>';
+            if (uploadModelSelect) {
+                uploadModelSelect.innerHTML = '<option value="" disabled selected>-- 请先训练模型 --</option>';
+            }
+            
+            // 计算是否有已训练的模型
+            let hasTrainedModels = false;
+            let modelCount = 0;
+            
+            // 检查是否有训练好的模型
+            if (data && data.success && data.models) {
+                // 遍历所有模型类型
+                Object.keys(data.models).forEach(modelType => {
+                    const models = data.models[modelType];
                     
-                    if (uploadModelSelect) {
-                        const uploadModelOptions = uploadModelSelect.querySelectorAll(`option[value="${modelTypeParam}"]`);
-                        if (uploadModelOptions && uploadModelOptions.length > 0) {
-                            uploadModelOptions[0].selected = true;
+                    if (models && models.length > 0) {
+                        hasTrainedModels = true;
+                        
+                        // 遍历当前类型的所有已训练模型
+                        models.forEach(modelInfo => {
+                            modelCount++;
+                            const modelName = getModelDisplayName(modelType);
+                            
+                            // 创建选项
+                            const option = document.createElement('option');
+                            option.value = modelType;
+                            option.textContent = `${modelName} (${modelInfo.date || modelInfo.timestamp})`;
+                            option.dataset.path = modelInfo.filename;
+                            
+                            // 添加到单条预测下拉菜单
+                            modelSelect.appendChild(option.cloneNode(true));
+                            
+                            // 添加到批量预测下拉菜单
+                            if (uploadModelSelect) {
+                                uploadModelSelect.appendChild(option.cloneNode(true));
+                            }
+                        });
+                    }
+                });
+                
+                // 隐藏警告
+                if (hasTrainedModels) {
+                    if (noModelWarning) noModelWarning.style.display = 'none';
+                    
+                    // 启用检测按钮
+                    if (detectButton) detectButton.disabled = false;
+                    if (uploadButton) uploadButton.disabled = false;
+                    
+                    // 如果URL中有模型类型参数，选中对应的选项
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const modelTypeParam = urlParams.get('model_type');
+                    
+                    if (modelTypeParam) {
+                        const modelOptions = modelSelect.querySelectorAll(`option[value="${modelTypeParam}"]`);
+                        if (modelOptions && modelOptions.length > 0) {
+                            modelOptions[0].selected = true;
+                        }
+                        
+                        if (uploadModelSelect) {
+                            const uploadModelOptions = uploadModelSelect.querySelectorAll(`option[value="${modelTypeParam}"]`);
+                            if (uploadModelOptions && uploadModelOptions.length > 0) {
+                                uploadModelOptions[0].selected = true;
+                            }
                         }
                     }
+                    
+                    console.log(`已加载 ${modelCount} 个已训练模型供使用`);
+                } else {
+                    // 显示警告，没有训练好的模型
+                    if (noModelWarning) noModelWarning.style.display = 'block';
+                    
+                    // 禁用检测按钮
+                    if (detectButton) detectButton.disabled = true;
+                    if (uploadButton) uploadButton.disabled = true;
                 }
-                
-                console.log(`已加载 ${modelCount} 个已训练模型供使用`);
             } else {
                 // 显示警告，没有训练好的模型
                 if (noModelWarning) noModelWarning.style.display = 'block';
@@ -993,14 +1002,6 @@ async function loadTrainedModelsForPrediction() {
                 if (detectButton) detectButton.disabled = true;
                 if (uploadButton) uploadButton.disabled = true;
             }
-        } else {
-            // 显示警告，没有训练好的模型
-            if (noModelWarning) noModelWarning.style.display = 'block';
-            
-            // 禁用检测按钮
-            if (detectButton) detectButton.disabled = true;
-            if (uploadButton) uploadButton.disabled = true;
-        }
     } catch (error) {
         console.error('加载已训练模型列表错误:', error);
         
@@ -1018,8 +1019,13 @@ async function loadTrainedModelsForPrediction() {
         // 禁用检测按钮
         if (detectButton) detectButton.disabled = true;
         if (uploadButton) uploadButton.disabled = true;
+        
+        reject(error);
     }
-}
+    
+    // 无论成功或失败，都返回结果
+    return resolve(true);
+});
 
 // 格式化时间戳为可读形式
 function formatTimestamp(timestamp) {

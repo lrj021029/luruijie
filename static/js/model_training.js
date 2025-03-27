@@ -160,10 +160,44 @@ function setupModelTraining() {
         
         // 添加使用此模型按钮事件
         document.getElementById('use-model-btn').addEventListener('click', function() {
-            // 保存模型选择到localStorage
-            localStorage.setItem('selected_model_type', data.model_type);
-            // 跳转到首页并自动选择当前训练的模型
-            window.location.href = `/?model_type=${data.model_type}`;
+            // 先自动调用加载模型接口
+            fetch('/load_model', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    model_path: data.model_path,
+                    model_type: data.model_type
+                })
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    // 保存模型选择到localStorage
+                    localStorage.setItem('selected_model_type', data.model_type);
+                    
+                    // 显示加载成功提示
+                    showToast('success', '模型已加载', `${getModelName(data.model_type)}模型已成功加载并可以使用`);
+                    
+                    // 手动保存当前页面状态
+                    if (typeof saveCurrentPageState === 'function') {
+                        saveCurrentPageState('index');
+                    }
+                    
+                    // 延迟跳转以确保toast可见
+                    setTimeout(() => {
+                        // 使用锚点触发软路由
+                        window.location.href = `/?model_type=${data.model_type}&from=training`;
+                    }, 500);
+                } else {
+                    showToast('danger', '模型加载失败', result.error || '未知错误');
+                }
+            })
+            .catch(error => {
+                console.error('加载模型错误:', error);
+                showToast('danger', '模型加载失败', error.message);
+            });
         });
         
         // 添加继续训练按钮事件
@@ -177,8 +211,12 @@ function setupModelTraining() {
         // 刷新模型列表
         loadSavedModels();
         
+        // 重新启用按钮，但保持训练结果可见
+        trainButton.disabled = false;
+        trainButton.innerHTML = '<i class="fas fa-graduation-cap me-2"></i>开始训练模型';
+        
         // 显示提示消息
-        showToast('success', '训练成功', '模型已保存并自动加载，可以立即使用或继续训练其他模型');
+        showToast('success', '训练成功', '模型已保存，点击"立即使用此模型"使用，或继续训练其他模型');
     }
     
     // 添加刷新模型列表按钮事件

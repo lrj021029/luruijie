@@ -154,9 +154,11 @@ def load_models():
             latest_timestamp = None
             
             for filename in os.listdir(saved_models_dir):
-                if filename.startswith(f"{model_type}_") and filename.endswith(".pt"):
+                # 根据模型类型选择文件扩展名
+                file_ext = ".pkl" if model_type in ['svm', 'naive_bayes'] else ".pt"
+                if filename.startswith(f"{model_type}_") and filename.endswith(file_ext):
                     # 从文件名中提取时间戳
-                    timestamp_str = filename.replace(f"{model_type}_", "").replace(".pt", "")
+                    timestamp_str = filename.replace(f"{model_type}_", "").replace(file_ext, "")
                     try:
                         if latest_timestamp is None or timestamp_str > latest_timestamp:
                             latest_timestamp = timestamp_str
@@ -882,8 +884,13 @@ def train_model_endpoint():
         # 生成时间戳
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         
-        # 设置模型保存路径
-        model_save_path = os.path.join(saved_models_dir, f"{model_type}_{timestamp}.pt")
+        # 设置模型保存路径，区分传统机器学习模型和深度学习模型
+        if model_type in ['svm', 'naive_bayes']:
+            # 传统机器学习模型使用.pkl后缀
+            model_save_path = os.path.join(saved_models_dir, f"{model_type}_{timestamp}.pkl")
+        else:
+            # 深度学习模型使用.pt后缀
+            model_save_path = os.path.join(saved_models_dir, f"{model_type}_{timestamp}.pt")
         
         # 获取未训练的模型
         model, _ = model_module.load_model(model_type)
@@ -943,9 +950,11 @@ def get_models():
             saved_models[model_type] = []
             
             for filename in os.listdir(saved_models_dir):
-                if filename.startswith(f"{model_type}_") and filename.endswith(".pt"):
+                # 根据模型类型选择文件扩展名
+                file_ext = ".pkl" if model_type in ['svm', 'naive_bayes'] else ".pt"
+                if filename.startswith(f"{model_type}_") and filename.endswith(file_ext):
                     # 从文件名中提取时间戳
-                    timestamp_str = filename.replace(f"{model_type}_", "").replace(".pt", "")
+                    timestamp_str = filename.replace(f"{model_type}_", "").replace(file_ext, "")
                     
                     # 尝试格式化时间戳
                     try:

@@ -160,6 +160,13 @@ function setupModelTraining() {
         
         // 添加使用此模型按钮事件
         document.getElementById('use-model-btn').addEventListener('click', function() {
+            // 禁用按钮，显示加载状态
+            const useModelBtn = document.getElementById('use-model-btn');
+            const continueBtn = document.getElementById('continue-training-btn');
+            useModelBtn.disabled = true;
+            useModelBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>加载模型中...';
+            continueBtn.disabled = true;
+            
             // 先自动调用加载模型接口
             fetch('/load_model', {
                 method: 'POST',
@@ -190,15 +197,33 @@ function setupModelTraining() {
                     
                     // 延迟跳转以确保toast可见
                     setTimeout(() => {
-                        // 使用锚点触发软路由
-                        window.location.href = `/?model_type=${data.model_type}&from=training`;
+                        try {
+                            // 直接使用window.location.replace以避免页面堆栈问题
+                            window.location.replace(`/?model_type=${data.model_type}&from=training`);
+                        } catch (error) {
+                            console.error('页面跳转错误:', error);
+                            // 回退到标准方法
+                            window.location.href = '/';
+                        }
                     }, 500);
                 } else {
+                    // 恢复按钮状态
+                    useModelBtn.disabled = false;
+                    useModelBtn.innerHTML = '<i class="fas fa-check-circle me-1"></i> 立即使用此模型';
+                    continueBtn.disabled = false;
+                    
+                    // 显示错误信息
                     showToast('danger', '模型加载失败', result.error || '未知错误');
                 }
             })
             .catch(error => {
                 console.error('加载模型错误:', error);
+                
+                // 恢复按钮状态
+                useModelBtn.disabled = false;
+                useModelBtn.innerHTML = '<i class="fas fa-check-circle me-1"></i> 立即使用此模型';
+                continueBtn.disabled = false;
+                
                 showToast('danger', '模型加载失败', error.message);
             });
         });

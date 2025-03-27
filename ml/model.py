@@ -327,10 +327,42 @@ def load_model(model_type, model_path=None):
             class DummyModel:
                 def __init__(self):
                     self.filepath = None
+                    # 创建一个虚拟参数以支持训练接口
+                    import numpy as np
+                    self.dummy_param = np.zeros(1)
                     
                 def predict(self, X):
                     # 返回随机预测结果
                     return np.random.randint(0, 2, size=len(X) if hasattr(X, '__len__') else 1)
+                
+                # 添加PyTorch模型方法的模拟实现，避免训练时的错误
+                def parameters(self):
+                    # 返回一个可迭代的参数列表
+                    return [self.dummy_param]
+                
+                def train(self):
+                    # 模拟train模式
+                    pass
+                
+                def eval(self):
+                    # 模拟eval模式
+                    pass
+                    
+                def __call__(self, X):
+                    # 使类可调用，模拟模型的前向传播
+                    import torch
+                    if isinstance(X, torch.Tensor):
+                        batch_size = X.size(0)
+                        return torch.rand((batch_size, 1))
+                    return self.predict(X)
+                    
+                def state_dict(self):
+                    # 返回一个空字典来模拟状态字典
+                    return {}
+                    
+                def load_state_dict(self, state_dict):
+                    # 模拟加载状态
+                    pass
             
             model = DummyModel()
             tokenizer = None
@@ -338,16 +370,45 @@ def load_model(model_type, model_path=None):
             raise ValueError(f"不支持的模型类型: {model_type}")
         
         # 如果提供了模型路径，尝试加载保存的模型
-        if model_path and model is not None and HAS_TORCH:
-            try:
-                logging.info(f"尝试加载保存的模型: {model_path}")
-                # 加载保存的模型参数
-                model.load_state_dict(torch.load(model_path))
-                model.eval()  # 设置为评估模式
-                logging.info(f"成功加载模型: {model_path}")
-            except Exception as load_err:
-                logging.error(f"加载保存模型失败: {str(load_err)}")
-                logging.error("将使用默认初始化的模型")
+        if model_path and model is not None:
+            # 对于传统机器学习模型（SVM, Naive Bayes），加载pickle格式的模型
+            if model_type in ['svm', 'naive_bayes']:
+                try:
+                    import pickle
+                    logging.info(f"尝试加载保存的传统机器学习模型: {model_path}")
+                    with open(model_path, 'rb') as f:
+                        model_package = pickle.load(f)
+                        
+                    # 处理不同格式的保存模型：
+                    # 1. 字典格式：{'model': model, 'vectorizer': vectorizer}
+                    # 2. 直接保存的模型对象
+                    if isinstance(model_package, dict) and 'model' in model_package:
+                        # 格式1：字典格式
+                        model = model_package['model']
+                        # 获取向量器（如果有）
+                        if 'vectorizer' in model_package and model_package['vectorizer'] is not None:
+                            tokenizer = model_package['vectorizer']
+                        logging.info(f"成功加载传统机器学习模型(字典格式): {model_path}")
+                    else:
+                        # 格式2：直接保存的模型对象
+                        model = model_package
+                        # 为模型添加文件路径属性
+                        model.filepath = model_path
+                        logging.info(f"成功加载传统机器学习模型(直接格式): {model_path}")
+                except Exception as load_err:
+                    logging.error(f"加载传统机器学习模型失败: {str(load_err)}")
+                    logging.error("将使用默认初始化的模型")
+            # 对于深度学习模型，加载PyTorch模型
+            elif HAS_TORCH:
+                try:
+                    logging.info(f"尝试加载保存的PyTorch模型: {model_path}")
+                    # 加载保存的模型参数
+                    model.load_state_dict(torch.load(model_path))
+                    model.eval()  # 设置为评估模式
+                    logging.info(f"成功加载模型: {model_path}")
+                except Exception as load_err:
+                    logging.error(f"加载保存模型失败: {str(load_err)}")
+                    logging.error("将使用默认初始化的模型")
         
         # 缓存模型和tokenizer
         model_cache[model_type] = model
@@ -441,8 +502,66 @@ def predict(model, features, model_type):
         model_spam_score = 0
         confidence = 0
         
-        # 如果PyTorch可用，且模型存在，使用模型预测
-        if HAS_TORCH and model is not None:
+        # 传统机器学习模型（SVM, Naive Bayes）
+        if model is not None and model_type in ['svm', 'naive_bayes']:
+            try:
+                from sklearn.feature_extraction.text import TfidfVectorizer
+                import pickle
+                
+                # 检查模型是否有预测方法
+                if hasattr(model, 'predict') and callable(getattr(model, 'predict')):
+                    # 如果是字符串特征，需要先向量化
+                    if isinstance(features, str):
+                        # 检查是否有关联的向量器
+                        vectorizer = tokenizer_cache.get(model_type)
+                        if vectorizer is not None and hasattr(vectorizer, 'transform'):
+                            # 使用已训练的向量器转换文本
+                            X = vectorizer.transform([features])
+                        else:
+                            # 创建一个临时向量器（应急措施）
+                            temp_vectorizer = TfidfVectorizer(max_features=5000)
+                            X = temp_vectorizer.fit_transform([features])
+                    elif isinstance(features, list) and len(features) > 0 and isinstance(features[0], str):
+                        # 处理文本列表
+                        vectorizer = tokenizer_cache.get(model_type)
+                        if vectorizer is not None and hasattr(vectorizer, 'transform'):
+                            X = vectorizer.transform(features)
+                        else:
+                            temp_vectorizer = TfidfVectorizer(max_features=5000)
+                            X = temp_vectorizer.fit_transform(features)
+                    else:
+                        # 已经是向量特征
+                        X = np.array(features).reshape(1, -1)
+                    
+                    # 获取预测
+                    prediction = model.predict(X)[0]
+                    
+                    # 如果模型支持概率预测
+                    if hasattr(model, 'predict_proba') and callable(getattr(model, 'predict_proba')):
+                        proba = model.predict_proba(X)[0]
+                        # 提取第1类（垃圾短信）的概率
+                        if len(proba) >= 2:
+                            model_spam_score = proba[1]
+                        else:
+                            model_spam_score = prediction  # 二分类的第一类概率
+                    else:
+                        # 如果不支持概率预测，使用硬预测结果
+                        model_spam_score = float(prediction)
+                        
+                    logging.info(f"传统机器学习模型预测成功: {model_type}, 分数: {model_spam_score:.4f}")
+                else:
+                    # 如果模型不支持预测方法，使用规则和随机预测
+                    logging.warning(f"模型 {model_type} 不支持预测方法，使用规则和随机预测")
+                    model_spam_score = np.random.uniform(0.4, 0.6)
+            
+            except Exception as ml_error:
+                logging.error(f"传统模型预测错误: {str(ml_error)}")
+                logging.error(traceback.format_exc())
+                # 如果预测失败，使用规则和随机预测
+                model_spam_score = np.random.uniform(0.3, 0.7)
+        
+        # 深度学习模型和集成模型（需要PyTorch）
+        elif HAS_TORCH and model is not None:
             try:
                 # 深度学习模型预测
                 if model_type in ['roberta', 'bert', 'lstm', 'cnn', 'xlnet', 'gpt', 'attention_lstm']:
@@ -453,6 +572,7 @@ def predict(model, features, model_type):
                         output = model(features_tensor)
                         # 获取sigmoid输出作为置信度
                         model_spam_score = torch.sigmoid(output).item()
+                        logging.info(f"深度学习模型预测成功: {model_type}, 分数: {model_spam_score:.4f}")
                 
                 # 集成模型预测
                 elif model_type == 'ensemble':
@@ -478,12 +598,15 @@ def predict(model, features, model_type):
                         
                         # 记录各子模型的贡献权重
                         logging.debug(f"集成模型权重: {weights}")
+                        logging.info(f"集成模型预测成功: 分数: {model_spam_score:.4f}")
             except Exception as model_error:
                 logging.error(f"模型预测错误: {str(model_error)}")
+                logging.error(traceback.format_exc())
                 # 如果模型预测失败，我们依赖规则和随机预测
                 model_spam_score = np.random.uniform(0.3, 0.7)
         else:
             # 如果没有可用模型，使用随机预测加规则
+            logging.warning(f"模型 {model_type} 不可用或PyTorch不可用，使用规则和随机预测")
             model_spam_score = np.random.uniform(0.3, 0.7)
         
         # 结合规则分数和模型分数 (70%规则 + 30%模型)

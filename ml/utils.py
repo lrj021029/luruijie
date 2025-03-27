@@ -18,19 +18,27 @@ def ensure_directory(directory):
 
 def save_model(model, model_path):
     """
-    保存PyTorch模型
+    保存模型 (支持PyTorch和传统机器学习模型)
     
     参数:
-        model: PyTorch模型
+        model: 模型实例 (PyTorch或sklearn)
         model_path: 保存路径
     """
     try:
         # 确保目录存在
         ensure_directory(os.path.dirname(model_path))
         
-        # 保存模型状态
-        torch.save(model.state_dict(), model_path)
-        logging.info(f"模型已保存至: {model_path}")
+        # 根据文件扩展名判断保存方式
+        if model_path.endswith('.pkl'):
+            # 使用pickle保存传统机器学习模型
+            import pickle
+            with open(model_path, 'wb') as f:
+                pickle.dump(model, f)
+            logging.info(f"传统机器学习模型已保存至: {model_path}")
+        else:
+            # 使用PyTorch保存深度学习模型
+            torch.save(model.state_dict(), model_path)
+            logging.info(f"PyTorch模型已保存至: {model_path}")
     
     except Exception as e:
         logging.error(f"保存模型错误: {str(e)}")

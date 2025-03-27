@@ -51,3 +51,32 @@ def get_ham_sms():
 def get_sms_by_model(model_type):
     """获取特定模型的短信记录"""
     return SMSMessage.query.filter_by(model_type=model_type).all()
+
+def delete_sms(sms_id):
+    """删除一条短信记录"""
+    sms = SMSMessage.query.get(sms_id)
+    if sms:
+        db.session.delete(sms)
+        db.session.commit()
+        return True
+    return False
+
+def delete_multiple_sms(sms_ids):
+    """批量删除多条短信记录"""
+    if not sms_ids:
+        return False
+    
+    # 使用 in_ 查询批量删除
+    deleted = SMSMessage.query.filter(SMSMessage.id.in_(sms_ids)).delete(synchronize_session=False)
+    db.session.commit()
+    return deleted > 0
+
+def delete_all_sms():
+    """删除所有短信记录"""
+    SMSMessage.query.delete()
+    db.session.commit()
+    return True
+
+def get_sms(sms_id):
+    """根据ID获取一条短信记录"""
+    return SMSMessage.query.get(sms_id)

@@ -452,6 +452,102 @@ def get_model_metrics():
         logging.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
+@app.route('/delete_record/<int:record_id>', methods=['DELETE'])
+def delete_record(record_id):
+    """删除单条预测记录"""
+    try:
+        # 导入数据库函数
+        from database import delete_sms
+        
+        # 删除记录
+        success = delete_sms(record_id)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'记录 {record_id} 已成功删除'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': f'记录 {record_id} 不存在或删除失败'
+            }), 404
+    
+    except Exception as e:
+        logging.error(f"删除记录错误: {str(e)}")
+        logging.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'message': f'删除失败: {str(e)}'
+        }), 500
+
+@app.route('/delete_records', methods=['DELETE'])
+def delete_records():
+    """批量删除预测记录"""
+    try:
+        # 导入数据库函数
+        from database import delete_multiple_sms
+        
+        # 获取要删除的记录ID列表
+        data = request.get_json()
+        if not data or 'ids' not in data or not data['ids']:
+            return jsonify({
+                'success': False,
+                'message': '未提供要删除的记录ID'
+            }), 400
+        
+        # 删除记录
+        ids = data['ids']
+        success = delete_multiple_sms(ids)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'已成功删除 {len(ids)} 条记录'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': '删除失败，请检查记录ID是否正确'
+            }), 404
+    
+    except Exception as e:
+        logging.error(f"批量删除记录错误: {str(e)}")
+        logging.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'message': f'删除失败: {str(e)}'
+        }), 500
+
+@app.route('/delete_all_records', methods=['DELETE'])
+def delete_all_records():
+    """删除所有预测记录"""
+    try:
+        # 导入数据库函数
+        from database import delete_all_sms
+        
+        # 删除所有记录
+        success = delete_all_sms()
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': '所有记录已成功删除'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': '删除所有记录失败'
+            }), 500
+    
+    except Exception as e:
+        logging.error(f"删除所有记录错误: {str(e)}")
+        logging.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'message': f'删除失败: {str(e)}'
+        }), 500
+
 # 启动应用时创建表
 with app.app_context():
     db.create_all()

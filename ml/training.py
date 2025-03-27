@@ -207,9 +207,16 @@ def train_model(model, features, labels, model_type, model_save_path, epochs=10,
                 
                 # 预处理文本特征
                 if isinstance(features[0], str):
-                    # 提取TF-IDF特征
-                    vectorizer = TfidfVectorizer(max_features=5000)
+                    # 提取TF-IDF特征，对英文和中文词汇都有良好识别
+                    vectorizer = TfidfVectorizer(max_features=5000, 
+                                               min_df=3,  # 至少出现3次的词才考虑
+                                               ngram_range=(1, 2))  # 同时考虑单个词和两个词的组合
                     X = vectorizer.fit_transform(features)
+                    logging.info(f"提取的特征维度: {X.shape}")
+                    # 记录一些高权重特征词
+                    feature_names = vectorizer.get_feature_names_out()
+                    if len(feature_names) > 0:
+                        logging.info(f"部分特征词示例: {feature_names[:20]}")
                 else:
                     # 已经是向量特征，直接使用
                     X = np.array(features)

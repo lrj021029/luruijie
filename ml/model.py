@@ -444,18 +444,42 @@ def predict(model, features, model_type):
         if isinstance(features, list) and len(features) > 0:
             text_str = str(features).lower()
         
-        # 垃圾短信关键词检测
-        spam_keywords = ["免费", "优惠", "折扣", "抽奖", "中奖", "点击", "链接", 
-                        "注册", "贷款", "活动", "限时", "推广", "促销", "赚钱", 
-                        "奖励", "办理", "现金", "红包", "投资", "http", "www", 
-                        "com", "cn", "网址", "官网", "平台", "入口", "申请", "offer",
-                        "限额", "专享", "代理", "招聘", "诚邀", "回复", "退订"]
+        # 垃圾短信关键词检测 - 增加英文关键词
+        spam_keywords = [
+            # 中文垃圾关键词
+            "免费", "优惠", "折扣", "抽奖", "中奖", "点击", "链接", 
+            "注册", "贷款", "活动", "限时", "推广", "促销", "赚钱", 
+            "奖励", "办理", "现金", "红包", "投资", "网址", "官网", 
+            "平台", "入口", "申请", "限额", "专享", "代理", "招聘", 
+            "诚邀", "回复", "退订", "验证码", "账号", "异常", "处理",
+            # 英文垃圾关键词
+            "free", "offer", "click", "link", "sign up", "register", 
+            "loan", "cash", "money", "limited", "promo", "promotion", 
+            "discount", "prize", "winner", "congrat", "reward", 
+            "deal", "coupon", "apply", "verify", "account", "login", 
+            "password", "business", "investment", "opportunity", "earn",
+            "income", "credit card", "urgent", "important", "action", 
+            "restricted", "access", "exclusive", "special", "claim", 
+            "confirm", "security", "update", "service", "subscription",
+            "http", "www", "com", "net", "org", "click here", "visit",
+            "website", "email", "customer", "survey", "gift", "bonus"
+        ]
         
-        # 正常短信关键词检测
-        ham_keywords = ["你好", "谢谢", "请问", "好的", "明天", "今天", "时间", 
-                       "朋友", "工作", "见面", "问候", "家人", "帮忙", "同意", 
-                       "晚上", "早上", "午饭", "学习", "健康", "祝福", "同学",
-                       "老师", "爸爸", "妈妈", "兄弟", "姐妹", "会议", "同事"]
+        # 正常短信关键词检测 - 增加英文正常关键词
+        ham_keywords = [
+            # 中文正常关键词
+            "你好", "谢谢", "请问", "好的", "明天", "今天", "时间", 
+            "朋友", "工作", "见面", "问候", "家人", "帮忙", "同意", 
+            "晚上", "早上", "午饭", "学习", "健康", "祝福", "同学",
+            "老师", "爸爸", "妈妈", "兄弟", "姐妹", "会议", "同事",
+            # 英文正常关键词
+            "hello", "hi", "thanks", "thank you", "meeting", "tomorrow",
+            "today", "time", "friend", "work", "family", "help", "agree",
+            "evening", "morning", "lunch", "study", "health", "class",
+            "teacher", "brother", "sister", "colleague", "regards",
+            "dinner", "weekend", "question", "answer", "information",
+            "please", "sure", "okay", "talk", "call", "later", "soon"
+        ]
         
         # 计算关键词匹配
         spam_match_count = sum(1 for keyword in spam_keywords if keyword in text_str)
@@ -508,46 +532,78 @@ def predict(model, features, model_type):
                 from sklearn.feature_extraction.text import TfidfVectorizer
                 import pickle
                 
+                # 记录详细日志以帮助调试
+                if isinstance(model, dict) and 'model' in model and 'vectorizer' in model:
+                    logging.info(f"已加载传统模型包，模型: {type(model['model']).__name__}, 向量器: {type(model['vectorizer']).__name__ if model['vectorizer'] else 'None'}")
+                else:
+                    logging.info(f"传统模型类型: {type(model).__name__}")
+                
+                # 处理模型包（从pickle加载的字典）
+                if isinstance(model, dict) and 'model' in model:
+                    actual_model = model['model']
+                    vectorizer = model.get('vectorizer')
+                    
+                    # 更新tokenizer缓存
+                    if vectorizer is not None and model_type:
+                        tokenizer_cache[model_type] = vectorizer
+                        logging.info(f"已将向量器添加到缓存: {model_type}")
+                else:
+                    actual_model = model
+                    vectorizer = tokenizer_cache.get(model_type)
+                
                 # 检查模型是否有预测方法
-                if hasattr(model, 'predict') and callable(getattr(model, 'predict')):
+                if hasattr(actual_model, 'predict') and callable(getattr(actual_model, 'predict')):
                     # 如果是字符串特征，需要先向量化
                     if isinstance(features, str):
+                        text_feature = features
+                        # 记录输入文本(便于调试)
+                        logging.info(f"预测输入文本: {text_feature[:50]}...")
+                        
                         # 检查是否有关联的向量器
-                        vectorizer = tokenizer_cache.get(model_type)
                         if vectorizer is not None and hasattr(vectorizer, 'transform'):
                             # 使用已训练的向量器转换文本
-                            X = vectorizer.transform([features])
+                            X = vectorizer.transform([text_feature])
+                            logging.info(f"使用已训练的向量器转换文本，特征维度: {X.shape}")
                         else:
-                            # 创建一个临时向量器（应急措施）
-                            temp_vectorizer = TfidfVectorizer(max_features=5000)
-                            X = temp_vectorizer.fit_transform([features])
+                            # 创建一个临时向量器（更好的应急措施）
+                            logging.warning("没有找到与模型关联的向量器，使用临时向量器")
+                            temp_vectorizer = TfidfVectorizer(max_features=5000, 
+                                                        min_df=1,
+                                                        ngram_range=(1, 2))
+                            X = temp_vectorizer.fit_transform([text_feature])
                     elif isinstance(features, list) and len(features) > 0 and isinstance(features[0], str):
                         # 处理文本列表
-                        vectorizer = tokenizer_cache.get(model_type)
+                        logging.info(f"输入为文本列表，长度: {len(features)}")
                         if vectorizer is not None and hasattr(vectorizer, 'transform'):
                             X = vectorizer.transform(features)
                         else:
-                            temp_vectorizer = TfidfVectorizer(max_features=5000)
+                            temp_vectorizer = TfidfVectorizer(max_features=5000, 
+                                                        min_df=1,
+                                                        ngram_range=(1, 2))
                             X = temp_vectorizer.fit_transform(features)
                     else:
                         # 已经是向量特征
                         X = np.array(features).reshape(1, -1)
+                        logging.info(f"输入为特征向量，形状: {X.shape}")
                     
                     # 获取预测
-                    prediction = model.predict(X)[0]
+                    prediction = actual_model.predict(X)[0]
+                    logging.info(f"原始预测结果: {prediction}")
                     
                     # 如果模型支持概率预测
-                    if hasattr(model, 'predict_proba') and callable(getattr(model, 'predict_proba')):
-                        proba = model.predict_proba(X)[0]
+                    if hasattr(actual_model, 'predict_proba') and callable(getattr(actual_model, 'predict_proba')):
+                        proba = actual_model.predict_proba(X)[0]
+                        logging.info(f"预测概率: {proba}")
+                        
                         # 提取第1类（垃圾短信）的概率
                         if len(proba) >= 2:
-                            model_spam_score = proba[1]
+                            model_spam_score = proba[1]  # 第二个类别的概率（通常是正类）
                         else:
-                            model_spam_score = prediction  # 二分类的第一类概率
+                            model_spam_score = float(prediction)  # 使用硬预测结果
                     else:
                         # 如果不支持概率预测，使用硬预测结果
                         model_spam_score = float(prediction)
-                        
+                    
                     logging.info(f"传统机器学习模型预测成功: {model_type}, 分数: {model_spam_score:.4f}")
                 else:
                     # 如果模型不支持预测方法，使用规则和随机预测
@@ -609,9 +665,26 @@ def predict(model, features, model_type):
             logging.warning(f"模型 {model_type} 不可用或PyTorch不可用，使用规则和随机预测")
             model_spam_score = np.random.uniform(0.3, 0.7)
         
-        # 结合规则分数和模型分数 (70%规则 + 30%模型)
-        # 大多数情况下应以模型为主，但由于这里是模拟模型，所以增加规则权重
-        final_spam_score = rule_spam_score * 0.7 + model_spam_score * 0.3
+        # 根据模型类型调整规则和模型权重
+        # 对于传统机器学习模型，增加模型比重
+        if model_type in ['naive_bayes', 'svm']:
+            # 传统机器学习模型：50%模型 + 50%规则
+            model_weight = 0.5
+            rule_weight = 0.5
+            logging.info(f"使用传统机器学习模型权重: 模型={model_weight}, 规则={rule_weight}")
+        elif model is not None and model_type in ['roberta', 'bert', 'xlnet', 'gpt']:
+            # 高级深度学习模型：70%模型 + 30%规则
+            model_weight = 0.7
+            rule_weight = 0.3
+            logging.info(f"使用高级深度学习模型权重: 模型={model_weight}, 规则={rule_weight}")
+        else:
+            # 默认或其他模型：40%模型 + 60%规则
+            model_weight = 0.4
+            rule_weight = 0.6
+            logging.info(f"使用默认模型权重: 模型={model_weight}, 规则={rule_weight}")
+            
+        # 结合规则分数和模型分数
+        final_spam_score = rule_spam_score * rule_weight + model_spam_score * model_weight
         
         # 如果有明显的正常短信特征，降低垃圾短信评分
         if rule_ham_score > 0.4:

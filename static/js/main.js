@@ -347,16 +347,91 @@ async function handleFileUpload(event) {
     }
 }
 
-// 加载预测历史数据
-async function loadHistory() {
+// 显示历史记录数据到表格
+function displayHistoryData(data) {
     const historyTable = document.getElementById('history-table');
+    if (!historyTable) return;
+    
     const tableBody = historyTable.querySelector('tbody');
-    const loadingSpinner = document.getElementById('history-spinner');
     const selectAllCheckbox = document.getElementById('select-all-records');
     const deleteSelectedBtn = document.getElementById('delete-selected');
     
+    // 清空表格
+    tableBody.innerHTML = '';
+    
+    // 重置全选框
+    if (selectAllCheckbox) selectAllCheckbox.checked = false;
+    if (deleteSelectedBtn) deleteSelectedBtn.disabled = true;
+    
+    // 填充表格
+    if (data.length === 0) {
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center">暂无历史记录</td>
+            </tr>
+        `;
+        return;
+    }
+    
+    // 创建表格行
+    for (const item of data) {
+        const row = document.createElement('tr');
+        
+        // 设置行的类
+        if (item.prediction === '垃圾短信') {
+            row.classList.add('table-danger');
+        }
+        
+        // 生成单元格
+        row.innerHTML = `
+            <td>
+                <div class="form-check">
+                    <input class="form-check-input history-select-checkbox" type="checkbox" value="${item.id}" onchange="updateDeleteSelectedButton()">
+                </div>
+            </td>
+            <td>${item.id}</td>
+            <td class="text-truncate" style="max-width: 300px;" title="${item.text}">${item.text}</td>
+            <td>${item.send_freq}</td>
+            <td>${item.is_night ? '是' : '否'}</td>
+            <td>${item.prediction === '垃圾短信' 
+                ? '<span class="badge bg-danger">垃圾短信</span>' 
+                : '<span class="badge bg-success">正常短信</span>'}
+            </td>
+            <td>${(item.confidence * 100).toFixed(1)}%</td>
+            <td>${getModelDisplayName(item.model_type)}</td>
+            <td>${new Date(item.timestamp).toLocaleString()}</td>
+            <td>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteRecord(${item.id})">
+                    <i class="fa fa-trash"></i>
+                </button>
+            </td>
+        `;
+        
+        tableBody.appendChild(row);
+    }
+    
+    // 添加事件监听器
+    addHistoryEventListeners();
+}
+
+// 加载预测历史数据
+async function loadHistory(forceReload = false) {
+    const historyTable = document.getElementById('history-table');
+    if (!historyTable) return;
+    
+    const loadingSpinner = document.getElementById('history-spinner');
+    
+    // 检查是否有缓存数据
+    if (window.cachedHistoryData && !forceReload) {
+        console.log('使用缓存的历史记录数据');
+        displayHistoryData(window.cachedHistoryData);
+        return window.cachedHistoryData;
+    }
+    
     // 显示加载动画
-    loadingSpinner.classList.remove('d-none');
+    if (loadingSpinner) {
+        loadingSpinner.classList.remove('d-none');
+    }
     
     try {
         // 发送请求到后端API
@@ -368,109 +443,66 @@ async function loadHistory() {
         
         const data = await response.json();
         
-        // 清空表格
-        tableBody.innerHTML = '';
+        // 缓存历史记录数据
+        window.cachedHistoryData = data;
         
-        // 重置全选框
-        selectAllCheckbox.checked = false;
-        deleteSelectedBtn.disabled = true;
+        // 显示数据
+        displayHistoryData(data);
         
-        // 填充表格
-        if (data.length === 0) {
-            tableBody.innerHTML = `
-                <tr>
-                    <td colspan="10" class="text-center">暂无记录</td>
-                </tr>
-            `;
-        } else {
-            data.forEach((item, index) => {
-                const row = document.createElement('tr');
-                
-                // 设置行的类，根据预测结果上色
-                row.className = item.prediction === '垃圾短信' ? 'table-danger' : 'table-success';
-                
-                // 设置行的数据ID用于详情查看
-                row.dataset.id = item.id;
-                
-                // 设置行内容
-                row.innerHTML = `
-                    <td>
-                        <div class="form-check">
-                            <input class="form-check-input record-checkbox" type="checkbox" value="${item.id}" id="record-${item.id}">
-                        </div>
-                    </td>
-                    <td>${index + 1}</td>
-                    <td>${item.text.substring(0, 30)}${item.text.length > 30 ? '...' : ''}</td>
-                    <td>${item.send_freq}</td>
-                    <td>${item.is_night}</td>
-                    <td>${item.prediction}</td>
-                    <td>${(item.confidence * 100).toFixed(1)}%</td>
-                    <td>${item.model_type}</td>
-                    <td>${item.timestamp}</td>
-                    <td>
-                        <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${item.id}" title="删除此记录">
-                            <i class="fas fa-trash-alt"></i>
-                        </button>
-                    </td>
-                `;
-                
-                tableBody.appendChild(row);
-            });
-            
-            // 添加删除单个记录的事件监听器
-            document.querySelectorAll('.delete-btn').forEach(btn => {
-                btn.addEventListener('click', async function() {
-                    const recordId = this.getAttribute('data-id');
-                    if (confirm(`确定要删除记录 #${recordId} 吗？`)) {
-                        await deleteRecord(recordId);
-                    }
-                });
-            });
-            
-            // 添加复选框事件监听器
-            document.querySelectorAll('.record-checkbox').forEach(checkbox => {
-                checkbox.addEventListener('change', updateDeleteSelectedButton);
-            });
-            
-            // 添加全选框事件监听器
-            selectAllCheckbox.addEventListener('change', function() {
-                const checkboxes = document.querySelectorAll('.record-checkbox');
-                checkboxes.forEach(cb => {
-                    cb.checked = this.checked;
-                });
-                updateDeleteSelectedButton();
-            });
-            
-            // 添加删除选中项按钮事件监听器
-            deleteSelectedBtn.addEventListener('click', deleteSelectedRecords);
-            
-            // 添加删除所有记录按钮事件监听器
-            document.getElementById('delete-all-confirm').addEventListener('click', deleteAllRecords);
+        // 隐藏加载动画
+        if (loadingSpinner) {
+            loadingSpinner.classList.add('d-none');
         }
         
+        return data;
     } catch (error) {
         console.error('加载历史记录错误:', error);
         
         // 显示错误消息
-        tableBody.innerHTML = `
-            <tr>
-                <td colspan="10" class="text-center text-danger">
-                    加载失败: ${error.message}
-                </td>
-            </tr>
-        `;
+        if (historyTable) {
+            const tableBody = historyTable.querySelector('tbody');
+            if (tableBody) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="text-center text-danger">
+                            <i class="fas fa-exclamation-circle"></i> 加载历史记录失败: ${error.message}
+                        </td>
+                    </tr>
+                `;
+            }
+        }
         
-    } finally {
         // 隐藏加载动画
-        loadingSpinner.classList.add('d-none');
+        if (loadingSpinner) {
+            loadingSpinner.classList.add('d-none');
+        }
+        
+        return [];
+    }
+}
+
+// 添加历史记录表格的事件监听器
+function addHistoryEventListeners() {
+    // 全选/取消全选
+    const selectAllCheckbox = document.getElementById('select-all-records');
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', function() {
+            const checkboxes = document.querySelectorAll('.history-select-checkbox');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
+            });
+            updateDeleteSelectedButton();
+        });
     }
 }
 
 // 更新删除选中按钮状态
 function updateDeleteSelectedButton() {
-    const checkboxes = document.querySelectorAll('.record-checkbox:checked');
+    const checkboxes = document.querySelectorAll('.history-select-checkbox:checked');
     const deleteSelectedBtn = document.getElementById('delete-selected');
-    deleteSelectedBtn.disabled = checkboxes.length === 0;
+    if (deleteSelectedBtn) {
+        deleteSelectedBtn.disabled = checkboxes.length === 0;
+    }
 }
 
 // 删除单个记录
@@ -499,7 +531,7 @@ async function deleteRecord(recordId) {
 
 // 删除选中的记录
 async function deleteSelectedRecords() {
-    const checkboxes = document.querySelectorAll('.record-checkbox:checked');
+    const checkboxes = document.querySelectorAll('.history-select-checkbox:checked');
     const ids = Array.from(checkboxes).map(cb => cb.value);
     
     if (ids.length === 0) {
@@ -777,16 +809,54 @@ function updateColumnSelects(headers) {
     });
 }
 
+// 全局词云数据缓存
+window.cachedSpamWordCloud = null;
+window.cachedHamWordCloud = null;
+window.cachedModelMetrics = null;
+window.cachedHistoryData = null;
+
 // 加载词云数据
-async function loadWordCloudData() {
-    const spamContainer = document.getElementById('spam-wordcloud');
-    const hamContainer = document.getElementById('ham-wordcloud');
+async function loadWordCloudData(forceReload = false) {
+    const spamContainer = document.getElementById('spam-word-cloud') || document.getElementById('spam-wordcloud');
+    const hamContainer = document.getElementById('ham-word-cloud') || document.getElementById('ham-wordcloud');
     const loadingSpinner = document.getElementById('wordcloud-spinner');
     
+    if (!spamContainer || !hamContainer) {
+        console.warn('词云容器不存在，跳过加载');
+        return;
+    }
+    
     // 显示加载动画
-    loadingSpinner.classList.remove('d-none');
+    if (loadingSpinner) {
+        loadingSpinner.classList.remove('d-none');
+    }
     
     try {
+        // 检查是否有缓存数据
+        if (window.cachedSpamWordCloud && window.cachedHamWordCloud && !forceReload) {
+            console.log('使用缓存的词云数据');
+            
+            // 渲染词云
+            if (window.cachedSpamWordCloud.length > 0) {
+                renderWordCloud(spamContainer, window.cachedSpamWordCloud, 'danger');
+            } else {
+                spamContainer.innerHTML = '<div class="alert alert-info">暂无足够数据生成垃圾短信词云</div>';
+            }
+            
+            if (window.cachedHamWordCloud.length > 0) {
+                renderWordCloud(hamContainer, window.cachedHamWordCloud, 'info');
+            } else {
+                hamContainer.innerHTML = '<div class="alert alert-info">暂无足够数据生成正常短信词云</div>';
+            }
+            
+            // 如果有加载指示器则隐藏
+            if (loadingSpinner) {
+                loadingSpinner.classList.add('d-none');
+            }
+            
+            return;
+        }
+        
         // 发送请求到后端API
         const response = await fetch('/get_features');
         
@@ -796,15 +866,28 @@ async function loadWordCloudData() {
         
         const data = await response.json();
         
+        // 缓存词云数据
+        if (data.spam_words) {
+            window.cachedSpamWordCloud = data.spam_words;
+            console.log('正在渲染词云，单词数量:', data.spam_words.length);
+            console.log('词云数据示例:', data.spam_words.slice(0, 5));
+        }
+        
+        if (data.ham_words) {
+            window.cachedHamWordCloud = data.ham_words;
+            console.log('正在渲染词云，单词数量:', data.ham_words.length);
+            console.log('词云数据示例:', data.ham_words.slice(0, 5));
+        }
+        
         // 渲染词云
         if (data.spam_words && data.spam_words.length > 0) {
-            renderWordCloud(spamContainer, data.spam_words, '#dc3545');
+            renderWordCloud(spamContainer, data.spam_words, 'danger');
         } else {
             spamContainer.innerHTML = '<div class="alert alert-info">暂无足够数据生成垃圾短信词云</div>';
         }
         
         if (data.ham_words && data.ham_words.length > 0) {
-            renderWordCloud(hamContainer, data.ham_words, '#28a745');
+            renderWordCloud(hamContainer, data.ham_words, 'info');
         } else {
             hamContainer.innerHTML = '<div class="alert alert-info">暂无足够数据生成正常短信词云</div>';
         }
@@ -813,8 +896,12 @@ async function loadWordCloudData() {
         console.error('加载词云数据错误:', error);
         
         // 显示错误消息
-        spamContainer.innerHTML = `<div class="alert alert-danger">加载垃圾短信词云失败: ${error.message}</div>`;
-        hamContainer.innerHTML = `<div class="alert alert-danger">加载正常短信词云失败: ${error.message}</div>`;
+        if (spamContainer) {
+            spamContainer.innerHTML = `<div class="alert alert-danger">加载垃圾短信词云失败: ${error.message}</div>`;
+        }
+        if (hamContainer) {
+            hamContainer.innerHTML = `<div class="alert alert-danger">加载正常短信词云失败: ${error.message}</div>`;
+        }
         
     } finally {
         // 隐藏加载动画
@@ -1061,14 +1148,34 @@ function getModelDisplayName(modelType) {
 }
 
 // 加载模型指标数据
-async function loadModelMetrics() {
-    const metricsContainer = document.getElementById('model-metrics-chart');
+async function loadModelMetrics(forceReload = false) {
+    const metricsContainer = document.getElementById('model-metrics-chart') || document.getElementById('model-metrics-container');
+    if (!metricsContainer) {
+        console.warn('模型指标容器不存在，跳过加载');
+        return;
+    }
+    
     const loadingSpinner = document.getElementById('metrics-spinner');
     
     // 显示加载动画
-    loadingSpinner.classList.remove('d-none');
+    if (loadingSpinner) {
+        loadingSpinner.classList.remove('d-none');
+    }
     
     try {
+        // 检查是否有缓存数据
+        if (window.cachedModelMetrics && !forceReload) {
+            console.log('使用缓存的模型指标数据');
+            renderModelMetricsChart(metricsContainer, window.cachedModelMetrics);
+            
+            // 如果有加载指示器则隐藏
+            if (loadingSpinner) {
+                loadingSpinner.classList.add('d-none');
+            }
+            
+            return;
+        }
+        
         // 发送请求到后端API
         const response = await fetch('/get_model_metrics');
         
@@ -1077,6 +1184,9 @@ async function loadModelMetrics() {
         }
         
         const data = await response.json();
+        
+        // 缓存模型指标数据
+        window.cachedModelMetrics = data;
         
         // 渲染模型指标图表
         renderModelMetricsChart(metricsContainer, data);
@@ -1093,7 +1203,9 @@ async function loadModelMetrics() {
         
     } finally {
         // 隐藏加载动画
-        loadingSpinner.classList.add('d-none');
+        if (loadingSpinner) {
+            loadingSpinner.classList.add('d-none');
+        }
     }
 }
 

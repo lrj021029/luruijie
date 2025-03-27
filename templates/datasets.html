@@ -84,8 +84,9 @@
                                             <div class="btn-group btn-group-sm" role="group">
                                                 <button type="button" class="btn btn-primary use-dataset-btn"
                                                         data-dataset-name="{{ file.filename }}"
-                                                        data-dataset-path="{{ file.path }}">
-                                                    <i class="fas fa-play"></i>
+                                                        data-dataset-path="{{ file.path }}"
+                                                        title="使用此数据集训练模型">
+                                                    <i class="fas fa-cogs me-1"></i>训练模型
                                                 </button>
                                             </div>
                                         </td>
@@ -496,7 +497,37 @@
         confirmBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>处理中...';
         
         try {
-            // 发送请求，使用新的文件系统直接处理端点
+            // 先检查CSV文件结构 - 请求验证文件是否可以用于当前操作
+            const verifyResponse = await fetch('/verify_csv_file', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    file_path: datasetPath,
+                    action: action
+                })
+            });
+            
+            const verifyData = await verifyResponse.json();
+            
+            // 如果验证失败，显示错误并终止
+            if (!verifyResponse.ok || !verifyData.success) {
+                showToast('error', '文件验证失败', verifyData.error || '数据集格式不正确');
+                return;
+            }
+            
+            // 如果需要手动指定列，显示列选择对话框
+            if (verifyData.need_column_mapping) {
+                // 关闭当前对话框，稍后再开始实际处理
+                bsModal.hide();
+                
+                // 显示列选择对话框 (这里将验证数据存储在模态框中，以便后续使用)
+                showColumnMappingModal(datasetPath, action, modelType, verifyData.columns);
+                return;
+            }
+            
+            // 正常处理 - 直接使用验证过的文件
             const response = await fetch('/use_csv_file', {
                 method: 'POST',
                 headers: {
@@ -505,7 +536,182 @@
                 body: JSON.stringify({
                     file_path: datasetPath,
                     action: action,
-                    model_type: modelType
+                    model_type: modelType,
+                    column_mapping: verifyData.column_mapping || {} // 使用系统检测到的列映射
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok && data.success) {
+                // 关闭模态框
+                bsModal.hide();
+                
+                // 显示成功提示
+                showToast('success', '操作成功', data.message || '数据集操作成功');
+                
+                // 如果是训练操作，可能需要重新加载模型列表
+                if (action === 'train') {
+                    window.location.href = '/'; // 暂时跳转到主页
+                }
+            } else {
+                // 显示错误提示
+                showToast('error', '操作失败', data.error || '使用数据集失败');
+            }
+        } catch (error) {
+            console.error('使用数据集错误:', error);
+            showToast('error', '操作失败', error.message);
+        } finally {
+            // 恢复按钮
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = '确认';
+        }
+    }
+    
+    // 显示列映射模态框
+    function showColumnMappingModal(datasetPath, action, modelType, columns) {
+        // 创建列选择模态框（如果不存在）
+        let modal = document.getElementById('column-mapping-modal');
+        
+        if (!modal) {
+            const modalHtml = `
+                <div class="modal fade" id="column-mapping-modal" tabindex="-1" aria-labelledby="columnMappingModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header bg-info text-white">
+                                <h5 class="modal-title" id="columnMappingModalLabel">指定CSV文件列</h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="关闭"></button>
+                            </div>
+                            <div class="modal-body">
+                                <p>系统无法自动识别CSV文件中的列，请手动指定：</p>
+                                <form id="column-mapping-form">
+                                    <input type="hidden" id="cm-dataset-path" name="file_path">
+                                    <input type="hidden" id="cm-action" name="action">
+                                    <input type="hidden" id="cm-model-type" name="model_type">
+                                    
+                                    <div class="mb-3">
+                                        <label for="cm-text-column" class="form-label">文本列</label>
+                                        <select class="form-select" id="cm-text-column" name="text_column" required>
+                                            <option value="" disabled selected>-- 请选择文本内容所在列 --</option>
+                                        </select>
+                                        <div class="form-text">包含短信文本内容的列</div>
+                                    </div>
+                                    
+                                    <div class="mb-3" id="label-column-container">
+                                        <label for="cm-label-column" class="form-label">标签列</label>
+                                        <select class="form-select" id="cm-label-column" name="label_column">
+                                            <option value="" selected>-- 无标签列（仅用于预测） --</option>
+                                        </select>
+                                        <div class="form-text">包含垃圾短信标签的列（如果没有，可以保留为"无标签列"）</div>
+                                    </div>
+                                </form>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                                <button type="button" class="btn btn-primary" id="confirm-column-mapping-btn">确认</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // 添加到DOM
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+            modal = document.getElementById('column-mapping-modal');
+            
+            // 添加确认按钮事件处理
+            document.getElementById('confirm-column-mapping-btn').addEventListener('click', confirmColumnMapping);
+        }
+        
+        // 填充模态框内容
+        document.getElementById('cm-dataset-path').value = datasetPath;
+        document.getElementById('cm-action').value = action;
+        document.getElementById('cm-model-type').value = modelType;
+        
+        // 清空并填充列选择
+        const textColumnSelect = document.getElementById('cm-text-column');
+        const labelColumnSelect = document.getElementById('cm-label-column');
+        
+        // 清空现有选项（保留第一个）
+        while (textColumnSelect.options.length > 1) {
+            textColumnSelect.remove(1);
+        }
+        
+        while (labelColumnSelect.options.length > 1) {
+            labelColumnSelect.remove(1);
+        }
+        
+        // 添加列选项
+        columns.forEach(column => {
+            const textOption = document.createElement('option');
+            textOption.value = column;
+            textOption.textContent = column;
+            textColumnSelect.appendChild(textOption);
+            
+            const labelOption = document.createElement('option');
+            labelOption.value = column;
+            labelOption.textContent = column;
+            labelColumnSelect.appendChild(labelOption);
+        });
+        
+        // 如果是训练操作，标签列必填，预测操作则非必填
+        if (action === 'train') {
+            labelColumnSelect.required = true;
+            document.getElementById('label-column-container').classList.remove('d-none');
+            labelColumnSelect.options[0].textContent = '-- 请选择标签所在列 --';
+        } else {
+            labelColumnSelect.required = false;
+            document.getElementById('label-column-container').classList.add('d-none');
+        }
+        
+        // 显示模态框
+        const bsModal = new bootstrap.Modal(modal);
+        bsModal.show();
+    }
+    
+    // 确认列映射
+    async function confirmColumnMapping() {
+        const form = document.getElementById('column-mapping-form');
+        const datasetPath = document.getElementById('cm-dataset-path').value;
+        const action = document.getElementById('cm-action').value;
+        const modelType = document.getElementById('cm-model-type').value;
+        const textColumn = document.getElementById('cm-text-column').value;
+        const labelColumn = document.getElementById('cm-label-column').value;
+        
+        const confirmBtn = document.getElementById('confirm-column-mapping-btn');
+        const modal = document.getElementById('column-mapping-modal');
+        const bsModal = bootstrap.Modal.getInstance(modal);
+        
+        // 验证表单
+        if (!textColumn) {
+            showToast('warning', '请选择文本列', '请选择包含短信文本内容的列');
+            return;
+        }
+        
+        if (action === 'train' && !labelColumn) {
+            showToast('warning', '请选择标签列', '训练模型需要标签列');
+            return;
+        }
+        
+        // 禁用按钮
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>处理中...';
+        
+        try {
+            // 发送使用数据集请求
+            const response = await fetch('/use_csv_file', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    file_path: datasetPath,
+                    action: action,
+                    model_type: modelType,
+                    column_mapping: {
+                        text_column: textColumn,
+                        label_column: labelColumn
+                    }
                 })
             });
             

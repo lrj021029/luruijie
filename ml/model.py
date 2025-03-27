@@ -10,7 +10,10 @@ import traceback
 HAS_TORCH = importlib.util.find_spec("torch") is not None
 HAS_TENSORFLOW = importlib.util.find_spec("tensorflow") is not None
 
-# 条件导入
+# 判断是否在Replit环境中
+IS_REPLIT = 'REPLIT_DB_URL' in os.environ
+
+# PyTorch导入
 if HAS_TORCH:
     try:
         import torch
@@ -21,9 +24,33 @@ if HAS_TORCH:
         logging.error(f"导入torch库失败: {e}")
         HAS_TORCH = False
 
-# 我们不直接使用TensorFlow，因此禁用它以避免兼容性问题
-HAS_TENSORFLOW = False
-logging.info("已禁用TensorFlow，使用替代方法")
+# TensorFlow导入
+# 在Replit环境中禁用TensorFlow，但保留代码供本地部署时使用
+if IS_REPLIT:
+    # 在Replit中禁用TensorFlow
+    HAS_TENSORFLOW = False
+    logging.info("Replit环境中禁用TensorFlow，使用替代方法")
+else:
+    # 非Replit环境（如本地CUDA机器）尝试导入TensorFlow
+    if HAS_TENSORFLOW:
+        try:
+            # 这里的代码只有在本地部署时才会执行
+            import tensorflow as tf
+            from tensorflow import keras
+            from tensorflow.keras import layers, models
+            logging.info("成功导入TensorFlow库")
+            
+            # 如果有CUDA，配置TensorFlow以使用GPU
+            if tf.config.list_physical_devices('GPU'):
+                logging.info(f"已检测到GPU: {tf.config.list_physical_devices('GPU')}")
+                # 配置TensorFlow使用内存增长而非一次性分配
+                for gpu in tf.config.list_physical_devices('GPU'):
+                    tf.config.experimental.set_memory_growth(gpu, True)
+        except Exception as e:
+            logging.error(f"导入TensorFlow库失败: {e}")
+            HAS_TENSORFLOW = False
+    else:
+        logging.info("未找到TensorFlow库，使用替代方法")
 
 # 设置日志级别
 logging.basicConfig(level=logging.DEBUG)

@@ -1323,30 +1323,26 @@ def use_dataset(dataset_id):
         logging.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
         
-@app.route('/use_csv_file', methods=['POST'])
-def use_csv_file():
-    """直接使用CSV文件进行训练或预测（通过文件路径）"""
+@app.route('/verify_csv_file', methods=['POST'])
+def verify_csv_file():
+    """验证CSV文件结构并返回列映射信息"""
     try:
         # 获取请求数据
         data = request.get_json()
         
         if not data:
-            return jsonify({'error': '无效的请求数据'}), 400
+            return jsonify({'success': False, 'error': '无效的请求数据'}), 400
             
         file_path = data.get('file_path')
         action = data.get('action', 'predict')
-        model_type = data.get('model_type', '')
         
         # 参数验证
         if not file_path:
-            return jsonify({'error': '未提供文件路径'}), 400
-            
-        if not model_type:
-            return jsonify({'error': '未提供模型类型'}), 400
+            return jsonify({'success': False, 'error': '未提供文件路径'}), 400
             
         # 检查文件是否存在
         if not os.path.exists(file_path):
-            return jsonify({'error': f'文件不存在: {file_path}'}), 400
+            return jsonify({'success': False, 'error': f'文件不存在: {file_path}'}), 400
             
         # 尝试多种编码读取CSV文件
         encodings = ['utf-8', 'latin1', 'gbk', 'gb2312', 'cp1252']
@@ -1358,38 +1354,126 @@ def use_csv_file():
             except Exception as e:
                 logging.error(f"尝试使用{encoding}编码读取失败: {str(e)}")
                 if encoding == encodings[-1]:  # 最后一个编码尝试也失败
-                    return jsonify({'error': '无法读取CSV文件，请检查编码格式'}), 400
+                    return jsonify({'success': False, 'error': '无法读取CSV文件，请检查编码格式或文件是否损坏'}), 400
         
+        # 获取列名
+        columns = df.columns.tolist()
+        
+        if len(columns) == 0:
+            return jsonify({'success': False, 'error': 'CSV文件没有列头'}), 400
+            
+        # 尝试自动识别文本列和标签列
+        possible_label_columns = ['label', 'class', 'category', 'spam', 'is_spam', '标签', '分类', '垃圾']
+        possible_text_columns = ['text', 'content', 'message', 'sms', '文本', '内容', '短信', '消息']
+        
+        label_column = None
+        text_column = None
+        
+        # 检查列名是否能匹配已知的标签列模式
+        for col in columns:
+            col_lower = col.lower()
+            if not label_column and any(pattern in col_lower for pattern in possible_label_columns):
+                label_column = col
+            if not text_column and any(pattern in col_lower for pattern in possible_text_columns):
+                text_column = col
+        
+        # 如果只有两列，且已识别其中一列，另一列可能是需要的列
+        if len(columns) == 2:
+            if label_column and not text_column:
+                text_column = [col for col in columns if col != label_column][0]
+            elif text_column and not label_column and action == 'train':
+                label_column = [col for col in columns if col != text_column][0]
+                
+        # 判断是否需要手动映射列
+        need_column_mapping = False
+        
+        # 对于训练操作，需要标签列和文本列
+        if action == 'train' and (not label_column or not text_column):
+            need_column_mapping = True
+        # 对于预测操作，只需要文本列
+        elif action == 'predict' and not text_column:
+            need_column_mapping = True
+            
+        # 构建返回结果
+        result = {
+            'success': True,
+            'columns': columns,
+            'need_column_mapping': need_column_mapping
+        }
+        
+        # 如果不需要手动映射，直接返回自动检测的映射
+        if not need_column_mapping:
+            result['column_mapping'] = {
+                'text_column': text_column,
+                'label_column': label_column
+            }
+            
+        return jsonify(result)
+            
+    except Exception as e:
+        logging.error(f"验证CSV文件错误: {str(e)}")
+        logging.error(traceback.format_exc())
+        return jsonify({'success': False, 'error': f'验证失败: {str(e)}'}), 500
+
+@app.route('/use_csv_file', methods=['POST'])
+def use_csv_file():
+    """直接使用CSV文件进行训练或预测（通过文件路径）"""
+    try:
+        # 获取请求数据
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'success': False, 'error': '无效的请求数据'}), 400
+            
+        file_path = data.get('file_path')
+        action = data.get('action', 'predict')
+        model_type = data.get('model_type', '')
+        column_mapping = data.get('column_mapping', {})
+        
+        # 参数验证
+        if not file_path:
+            return jsonify({'success': False, 'error': '未提供文件路径'}), 400
+            
+        if not model_type:
+            return jsonify({'success': False, 'error': '未提供模型类型'}), 400
+            
+        # 获取列映射
+        text_column = column_mapping.get('text_column')
+        label_column = column_mapping.get('label_column')
+        
+        # 训练模式必须有标签列
+        if action == 'train' and not label_column:
+            return jsonify({'success': False, 'error': '训练模式必须指定标签列'}), 400
+            
+        # 所有模式都必须有文本列
+        if not text_column:
+            return jsonify({'success': False, 'error': '必须指定文本列'}), 400
+            
+        # 检查文件是否存在
+        if not os.path.exists(file_path):
+            return jsonify({'success': False, 'error': f'文件不存在: {file_path}'}), 400
+            
+        # 尝试多种编码读取CSV文件
+        encodings = ['utf-8', 'latin1', 'gbk', 'gb2312', 'cp1252']
+        df = None
+        for encoding in encodings:
+            try:
+                df = pd.read_csv(file_path, encoding=encoding)
+                break
+            except Exception as e:
+                logging.error(f"尝试使用{encoding}编码读取失败: {str(e)}")
+                if encoding == encodings[-1]:  # 最后一个编码尝试也失败
+                    return jsonify({'success': False, 'error': '无法读取CSV文件，请检查编码格式或文件是否损坏'}), 400
+        
+        # 检查列是否存在
+        if text_column not in df.columns:
+            return jsonify({'success': False, 'error': f'找不到文本列: {text_column}'}), 400
+            
+        if action == 'train' and label_column not in df.columns:
+            return jsonify({'success': False, 'error': f'找不到标签列: {label_column}'}), 400
+            
         # 根据操作类型处理
         if action == 'train':
-            # 尝试查找标签列
-            possible_label_columns = ['label', 'class', 'category', 'spam', 'is_spam', '标签', '分类', '垃圾']
-            label_column = None
-            
-            for col in df.columns:
-                if col.lower() in possible_label_columns:
-                    label_column = col
-                    break
-            
-            if not label_column:
-                return jsonify({'error': '无法识别标签列，请检查CSV文件格式'}), 400
-                
-            # 查找文本列
-            possible_text_columns = ['text', 'content', 'message', 'sms', '文本', '内容', '短信', '消息']
-            text_column = None
-            
-            for col in df.columns:
-                if col.lower() in possible_text_columns:
-                    text_column = col
-                    break
-                    
-            if not text_column:
-                # 如果只有两列，且其中一列是标签列，另一列就是文本列
-                if len(df.columns) == 2:
-                    text_column = [col for col in df.columns if col != label_column][0]
-                else:
-                    return jsonify({'error': '无法识别文本列，请检查CSV文件格式'}), 400
-            
             # 将标签转换为数值型 (0: 正常短信, 1: 垃圾短信)
             labels = []
             for label in df[label_column]:
@@ -1407,10 +1491,10 @@ def use_csv_file():
             
             # 检查数据条数
             if len(texts) != len(labels):
-                return jsonify({'error': '文本和标签数量不匹配'}), 400
+                return jsonify({'success': False, 'error': '文本和标签数量不匹配'}), 400
                 
             if len(texts) == 0:
-                return jsonify({'error': 'CSV文件中没有有效数据'}), 400
+                return jsonify({'success': False, 'error': 'CSV文件中没有有效数据'}), 400
                 
             # 导入训练模块
             from ml.training import train_model
@@ -1452,19 +1536,25 @@ def use_csv_file():
             except Exception as e:
                 logging.error(f"模型训练错误: {str(e)}")
                 logging.error(traceback.format_exc())
-                return jsonify({'error': f'模型训练失败: {str(e)}'}), 500
+                return jsonify({'success': False, 'error': f'模型训练失败: {str(e)}'}), 500
                 
         elif action == 'predict':
-            # 预测逻辑
-            return jsonify({'success': True, 'message': '预测功能尚未实现'})
+            # 获取文本数据
+            texts = df[text_column].fillna('').astype(str).tolist()
+            
+            if len(texts) == 0:
+                return jsonify({'success': False, 'error': 'CSV文件中没有有效数据'}), 400
+                
+            # 预测逻辑 - 这里目前只返回一个成功消息
+            return jsonify({'success': True, 'message': '预测功能尚未实现', 'text_count': len(texts)})
             
         else:
-            return jsonify({'error': '无效的操作类型'}), 400
+            return jsonify({'success': False, 'error': '无效的操作类型'}), 400
             
     except Exception as e:
         logging.error(f"使用CSV文件错误: {str(e)}")
         logging.error(traceback.format_exc())
-        return jsonify({'error': f'处理失败: {str(e)}'}), 500
+        return jsonify({'success': False, 'error': f'处理失败: {str(e)}'}), 500
 
 # 启动应用时创建表
 with app.app_context():

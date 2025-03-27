@@ -16,8 +16,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/wordcloud2.js/1.1.0/wordcloud2.min.js"></script>
 </head>
 <body>
-    <!-- 导航栏 -->
-    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+    <!-- 导航栏 - 添加fixed-top类使其固定在顶部 -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light fixed-top">
         <div class="container">
             <a class="navbar-brand" href="/">
                 <i class="fas fa-shield-alt me-2"></i>垃圾短信过滤系统
@@ -48,6 +48,8 @@
             </div>
         </div>
     </nav>
+    <!-- 添加导航栏占位符，防止内容被覆盖 -->
+    <div class="navbar-placeholder mb-5"></div>
 
     <!-- 主要内容 -->
     <div class="container app-content">

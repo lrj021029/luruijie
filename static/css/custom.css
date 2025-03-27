@@ -17,6 +17,11 @@
     padding: 2rem 0;
 }
 
+/* 导航栏固定后的占位符 */
+.navbar-placeholder {
+    height: 60px; /* 根据导航栏高度调整 */
+}
+
 /* 标题样式 */
 .page-title {
     margin-bottom: 1.5rem;

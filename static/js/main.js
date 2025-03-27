@@ -759,19 +759,24 @@ async function loadWordCloudData() {
 
 // 渲染词云
 function renderWordCloud(container, words, color) {
+    // 转换数据格式为WordCloud2.js需要的格式 [[word, weight], [word, weight]]
+    const wordList = words.map(item => [item.word, item.value]);
+    
     // 词云配置
     const options = {
-        list: words,
+        list: wordList,
         fontFamily: 'Pingfang SC, Source Sans Pro, Microsoft Yahei',
         fontWeight: 'bold',
         color: color,
         minSize: 12,
-        weightFactor: 2,
+        weightFactor: 6,  // 增大权重因子使词云更明显
         backgroundColor: 'transparent',
         gridSize: 8,
         drawOutOfBound: false,
         hover: function(item, dimension) {
-            container.querySelector('.word-info').textContent = `"${item[0]}" 出现 ${item[1]} 次`;
+            if (container.querySelector('.word-info')) {
+                container.querySelector('.word-info').textContent = `"${item[0]}" 出现 ${item[1]} 次`;
+            }
         }
     };
     
@@ -787,8 +792,16 @@ function renderWordCloud(container, words, color) {
     canvas.height = 300;
     container.appendChild(canvas);
     
-    // 渲染词云
-    WordCloud(canvas, options);
+    console.log("正在渲染词云，单词数量:", wordList.length);
+    console.log("词云数据示例:", wordList.slice(0, 5));
+    
+    try {
+        // 渲染词云
+        WordCloud(canvas, options);
+    } catch (error) {
+        console.error("词云渲染失败:", error);
+        container.innerHTML = `<div class="alert alert-danger">词云渲染失败: ${error.message}</div>`;
+    }
 }
 
 // 加载模型指标数据

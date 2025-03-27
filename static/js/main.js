@@ -1002,30 +1002,31 @@ async function loadTrainedModelsForPrediction() {
                 if (detectButton) detectButton.disabled = true;
                 if (uploadButton) uploadButton.disabled = true;
             }
-    } catch (error) {
-        console.error('加载已训练模型列表错误:', error);
-        
-        // 显示错误消息
-        if (noModelWarning) {
-            noModelWarning.style.display = 'block';
-            noModelWarning.innerHTML = `
-                <div class="alert alert-warning">
-                    <i class="fas fa-exclamation-triangle me-2"></i>
-                    <strong>提示：</strong>请先训练模型才能进行预测
-                </div>
-            `;
+        } catch (error) {
+            console.error('加载已训练模型列表错误:', error);
+            
+            // 显示错误消息
+            if (noModelWarning) {
+                noModelWarning.style.display = 'block';
+                noModelWarning.innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>提示：</strong>请先训练模型才能进行预测
+                    </div>
+                `;
+            }
+            
+            // 禁用检测按钮
+            if (detectButton) detectButton.disabled = true;
+            if (uploadButton) uploadButton.disabled = true;
+            
+            reject(error);
         }
         
-        // 禁用检测按钮
-        if (detectButton) detectButton.disabled = true;
-        if (uploadButton) uploadButton.disabled = true;
-        
-        reject(error);
-    }
-    
-    // 无论成功或失败，都返回结果
-    return resolve(true);
-});
+        // 无论成功或失败，都返回结果
+        return resolve(true);
+    });
+}
 
 // 格式化时间戳为可读形式
 function formatTimestamp(timestamp) {

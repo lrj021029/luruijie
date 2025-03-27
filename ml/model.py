@@ -3,6 +3,8 @@ import os
 import pickle
 import logging
 import importlib.util
+import re
+import traceback
 
 # 检查依赖库是否可用
 HAS_TORCH = importlib.util.find_spec("torch") is not None
@@ -241,12 +243,13 @@ class EnsembleAttentionModel(nn.Module):
         # 返回预测结果和注意力权重
         return prediction, attention_weights
 
-def load_model(model_type):
+def load_model(model_type, model_path=None):
     """
-    加载预训练模型
+    加载预训练模型或保存的模型
     
     参数:
         model_type: 模型类型（'roberta', 'lstm', 'bert', 'cnn', 'xlnet', 'gpt', 'attention_lstm', 'svm', 'naive_bayes'）
+        model_path: 模型保存路径（如果提供，则从该路径加载模型）
     
     返回:
         model: 加载的模型
@@ -261,6 +264,7 @@ def load_model(model_type):
         return None, None
     
     try:
+        # 初始化模型
         if model_type == 'roberta':
             # 初始化RoBERTa分类器
             model = SpamClassifier(input_dim=770)  # 768 + 2 (元数据特征)
@@ -301,6 +305,18 @@ def load_model(model_type):
         else:
             raise ValueError(f"不支持的模型类型: {model_type}")
         
+        # 如果提供了模型路径，尝试加载保存的模型
+        if model_path and model is not None and HAS_TORCH:
+            try:
+                logging.info(f"尝试加载保存的模型: {model_path}")
+                # 加载保存的模型参数
+                model.load_state_dict(torch.load(model_path))
+                model.eval()  # 设置为评估模式
+                logging.info(f"成功加载模型: {model_path}")
+            except Exception as load_err:
+                logging.error(f"加载保存模型失败: {str(load_err)}")
+                logging.error("将使用默认初始化的模型")
+        
         # 缓存模型和tokenizer
         model_cache[model_type] = model
         tokenizer_cache[model_type] = tokenizer
@@ -325,112 +341,141 @@ def predict(model, features, model_type):
         confidence: 置信度 (0-1之间的值)
     """
     try:
-        # 提取特征中常见的垃圾短信关键词特征
-        text_features = features
-        if isinstance(features, list) and len(features) > 0:
-            # 检查是否包含特定垃圾短信关键词
-            text_str = str(features).lower()
-            spam_keywords = ["免费", "优惠", "折扣", "抽奖", "中奖", "点击", "链接", 
-                            "注册", "贷款", "活动", "限时", "推广", "促销", "赚钱", 
-                            "奖励", "办理", "现金", "红包", "投资", "http", "www", 
-                            "com", "cn", "网址", "官网", "平台", "入口"]
-            
-            # 计算关键词匹配数量
-            keyword_match_count = sum(1 for keyword in spam_keywords if keyword in text_str)
-            keyword_match_ratio = keyword_match_count / len(spam_keywords)
-            
-            # 垃圾短信通常较长
-            text_length_factor = min(1.0, len(text_str) / 500)  # 标准化长度（最大视为500字符）
-            
-            # 如果特定关键词匹配率很高，则倾向于判定为垃圾短信
-            if keyword_match_ratio > 0.25 or (keyword_match_ratio > 0.15 and text_length_factor > 0.7):
-                spam_bias = 0.4  # 设置偏向垃圾短信的偏差值
-            else:
-                spam_bias = 0.0
-        else:
-            spam_bias = 0.0
-            
-        # 如果PyTorch不可用，使用基于规则的预测
-        if not HAS_TORCH:
-            # 根据特征中包含的关键词和信息，进行更加智能的预测
-            seed = hash(str(features) + model_type) % 10000
-            np.random.seed(seed)
-            base_confidence = np.random.uniform(0.6, 0.9)
-            
-            # 添加偏差，使预测更加倾向于垃圾短信或正常短信
-            adjusted_confidence = base_confidence + spam_bias
-            adjusted_confidence = max(0.0, min(1.0, adjusted_confidence))  # 确保在0-1范围内
-            
-            prediction = 1 if adjusted_confidence > 0.5 else 0
-            return prediction, adjusted_confidence
-            
-        # 深度学习模型预测
-        if model_type in ['roberta', 'bert', 'lstm', 'cnn', 'xlnet', 'gpt', 'attention_lstm'] and model is not None:
-            model.eval()
-            with torch.no_grad():
-                # 将特征转换为张量
-                features_tensor = torch.FloatTensor(features).unsqueeze(0)
-                output = model(features_tensor)
-                # 获取sigmoid输出作为置信度
-                confidence = torch.sigmoid(output).item()
-                
-                # 添加偏差以提高准确率
-                adjusted_confidence = confidence + spam_bias
-                adjusted_confidence = max(0.0, min(1.0, adjusted_confidence))  # 确保在0-1范围内
-                
-                # 预测类别
-                prediction = 1 if adjusted_confidence > 0.5 else 0
-                return prediction, adjusted_confidence
+        # 初始化正常/垃圾短信的分类依据
+        is_spam = False
+        spam_score = 0.0
+        ham_score = 0.0
         
-        # 集成模型预测
-        elif model_type == 'ensemble' and model is not None:
-            model.eval()
-            with torch.no_grad():
-                # 为集成模型准备输入
-                # 需要从各个模型获取特征，然后构建特征字典传入集成模型
+        # 提取原始文本，用于基于规则的判断
+        text_str = ""
+        if isinstance(features, list) and len(features) > 0:
+            text_str = str(features).lower()
+        
+        # 垃圾短信关键词检测
+        spam_keywords = ["免费", "优惠", "折扣", "抽奖", "中奖", "点击", "链接", 
+                        "注册", "贷款", "活动", "限时", "推广", "促销", "赚钱", 
+                        "奖励", "办理", "现金", "红包", "投资", "http", "www", 
+                        "com", "cn", "网址", "官网", "平台", "入口", "申请", "offer",
+                        "限额", "专享", "代理", "招聘", "诚邀", "回复", "退订"]
+        
+        # 正常短信关键词检测
+        ham_keywords = ["你好", "谢谢", "请问", "好的", "明天", "今天", "时间", 
+                       "朋友", "工作", "见面", "问候", "家人", "帮忙", "同意", 
+                       "晚上", "早上", "午饭", "学习", "健康", "祝福", "同学",
+                       "老师", "爸爸", "妈妈", "兄弟", "姐妹", "会议", "同事"]
+        
+        # 计算关键词匹配
+        spam_match_count = sum(1 for keyword in spam_keywords if keyword in text_str)
+        ham_match_count = sum(1 for keyword in ham_keywords if keyword in text_str)
+        
+        # 文本长度特征 (垃圾短信通常较长)
+        text_length = len(text_str)
+        text_length_factor = min(1.0, text_length / 500)  # 标准化长度
+        
+        # 分析更多特征
+        url_pattern = re.compile(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
+        has_url = bool(url_pattern.search(text_str))
+        has_numbers = bool(re.search(r'\d{4,}', text_str))  # 包含4位以上数字
+        has_exclamation = '!' in text_str or '！' in text_str
+        has_percentage = '%' in text_str or '％' in text_str
+        
+        # 综合判断基于规则的分数
+        if has_url:
+            spam_score += 0.3
+        if has_numbers:
+            spam_score += 0.1
+        if has_exclamation:
+            spam_score += 0.1
+        if has_percentage:
+            spam_score += 0.2
+            
+        # 基于关键词的分数
+        spam_keyword_score = spam_match_count / len(spam_keywords) * 0.6
+        ham_keyword_score = ham_match_count / len(ham_keywords) * 0.6
+        
+        # 长度惩罚 (针对过长垃圾短信)
+        if text_length > 100:
+            spam_score += text_length_factor * 0.1
+        
+        # 最终规则分数
+        rule_spam_score = min(1.0, spam_score + spam_keyword_score)
+        rule_ham_score = min(1.0, ham_keyword_score)
+        
+        # 常规模拟预测 (深度学习模型和集成模型)
+        seed = hash(str(features) + model_type) % 10000
+        np.random.seed(seed)
+        
+        # 模型预测分数 (在实际应用中，这里应该使用真实训练好的模型)
+        model_spam_score = 0
+        confidence = 0
+        
+        # 如果PyTorch可用，且模型存在，使用模型预测
+        if HAS_TORCH and model is not None:
+            try:
+                # 深度学习模型预测
+                if model_type in ['roberta', 'bert', 'lstm', 'cnn', 'xlnet', 'gpt', 'attention_lstm']:
+                    model.eval()
+                    with torch.no_grad():
+                        # 将特征转换为张量
+                        features_tensor = torch.FloatTensor(features).unsqueeze(0)
+                        output = model(features_tensor)
+                        # 获取sigmoid输出作为置信度
+                        model_spam_score = torch.sigmoid(output).item()
                 
-                # 使用当前特征向量作为默认，应该包含所有模型用到的特征
-                features_tensor = torch.FloatTensor(features).unsqueeze(0)
-                
-                # 构建特征字典（真实使用中应该调用各子模型获取特征）
-                features_dict = {
-                    'roberta': features_tensor,
-                    'lstm': features_tensor,
-                    'bert': features_tensor,
-                    'cnn': features_tensor,
-                    'xlnet': features_tensor,
-                    'gpt': features_tensor,
-                    'attention_lstm': features_tensor
-                }
-                
-                # 这里简化模拟集成模型：对所有子模型进行相同的预测并输出权重
-                output, weights = model(features_dict)
-                
-                # 获取预测值和置信度
-                confidence = torch.sigmoid(output).item()
-                adjusted_confidence = confidence + spam_bias
-                adjusted_confidence = max(0.0, min(1.0, adjusted_confidence))  # 确保在0-1范围内
-                
-                prediction = 1 if adjusted_confidence > 0.5 else 0
-                
-                # 可以记录各个子模型的贡献权重（日志或用于可视化）
-                logging.debug(f"集成模型权重: {weights}")
-                
-                return prediction, adjusted_confidence
+                # 集成模型预测
+                elif model_type == 'ensemble':
+                    model.eval()
+                    with torch.no_grad():
+                        # 使用当前特征向量作为默认
+                        features_tensor = torch.FloatTensor(features).unsqueeze(0)
+                        
+                        # 构建特征字典
+                        features_dict = {
+                            'roberta': features_tensor,
+                            'lstm': features_tensor,
+                            'bert': features_tensor,
+                            'cnn': features_tensor,
+                            'xlnet': features_tensor,
+                            'gpt': features_tensor,
+                            'attention_lstm': features_tensor
+                        }
+                        
+                        # 调用集成模型
+                        output, weights = model(features_dict)
+                        model_spam_score = torch.sigmoid(output).item()
+                        
+                        # 记录各子模型的贡献权重
+                        logging.debug(f"集成模型权重: {weights}")
+            except Exception as model_error:
+                logging.error(f"模型预测错误: {str(model_error)}")
+                # 如果模型预测失败，我们依赖规则和随机预测
+                model_spam_score = np.random.uniform(0.3, 0.7)
         else:
-            # 传统机器学习模型预测，使用基于规则的增强预测
-            seed = hash(str(features) + model_type) % 10000
-            np.random.seed(seed)
-            
-            # 基础置信度
-            base_confidence = np.random.uniform(0.65, 0.95)
-            
-            # 调整后的置信度（考虑垃圾短信特征偏差）
-            adjusted_confidence = base_confidence + spam_bias
-            adjusted_confidence = max(0.0, min(1.0, adjusted_confidence))  # 确保在0-1范围内
-            
-            prediction = 1 if adjusted_confidence > 0.5 else 0
-            return prediction, adjusted_confidence
+            # 如果没有可用模型，使用随机预测加规则
+            model_spam_score = np.random.uniform(0.3, 0.7)
+        
+        # 结合规则分数和模型分数 (70%规则 + 30%模型)
+        # 大多数情况下应以模型为主，但由于这里是模拟模型，所以增加规则权重
+        final_spam_score = rule_spam_score * 0.7 + model_spam_score * 0.3
+        
+        # 如果有明显的正常短信特征，降低垃圾短信评分
+        if rule_ham_score > 0.4:
+            final_spam_score = max(0.0, final_spam_score - rule_ham_score * 0.5)
+        
+        # 将分数调整为合理范围并避免极端值
+        final_spam_score = max(0.05, min(0.95, final_spam_score))
+        
+        # 最终判断
+        prediction = 1 if final_spam_score > 0.5 else 0
+        confidence = final_spam_score if prediction == 1 else (1.0 - final_spam_score)
+        
+        # 记录预测详情，帮助调试
+        logging.debug(f"短信预测: 文本={text_str[:30]}..., 垃圾关键词={spam_match_count}, " +
+                      f"正常关键词={ham_match_count}, 规则分={rule_spam_score:.2f}, " +
+                      f"模型分={model_spam_score:.2f}, 最终分={final_spam_score:.2f}, " +
+                      f"预测={prediction}, 置信度={confidence:.2f}")
+        
+        return prediction, confidence
     
     except Exception as e:
         logging.error(f"预测错误: {str(e)}")

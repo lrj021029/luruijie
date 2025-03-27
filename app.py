@@ -14,6 +14,8 @@ import ml.preprocessing as preprocessing
 import ml.feature_extraction as feature_extraction
 import ml.model as model_module
 import ml.drift as drift
+import ml.training as training
+import ml.utils as ml_utils
 
 # 设置日志级别
 logging.basicConfig(level=logging.DEBUG)
@@ -53,10 +55,39 @@ def load_models():
     """加载所有机器学习模型"""
     global models, tokenizers
     try:
+        # 确保模型保存目录存在
+        saved_models_dir = os.path.join('ml', 'saved_models')
+        os.makedirs(saved_models_dir, exist_ok=True)
+        
         # 初始化模型
         for model_type in model_types:
             logging.info(f"正在加载 {model_type} 模型...")
-            models[model_type], tokenizers[model_type] = model_module.load_model(model_type)
+            
+            # 查找该类型的最新保存模型
+            latest_model_path = None
+            latest_timestamp = None
+            
+            for filename in os.listdir(saved_models_dir):
+                if filename.startswith(f"{model_type}_") and filename.endswith(".pt"):
+                    # 从文件名中提取时间戳
+                    timestamp_str = filename.replace(f"{model_type}_", "").replace(".pt", "")
+                    try:
+                        if latest_timestamp is None or timestamp_str > latest_timestamp:
+                            latest_timestamp = timestamp_str
+                            latest_model_path = os.path.join(saved_models_dir, filename)
+                    except:
+                        pass
+            
+            # 如果找到了保存的模型，尝试加载它
+            if latest_model_path and os.path.exists(latest_model_path):
+                logging.info(f"加载保存的模型: {latest_model_path}")
+                model, tokenizer = model_module.load_model(model_type, model_path=latest_model_path)
+            else:
+                # 否则加载默认模型
+                model, tokenizer = model_module.load_model(model_type)
+                
+            models[model_type] = model
+            tokenizers[model_type] = tokenizer
             logging.info(f"{model_type} 模型加载完成")
     except Exception as e:
         logging.error(f"模型加载失败: {str(e)}")
@@ -620,6 +651,148 @@ def delete_all_records():
             'success': False,
             'message': f'删除失败: {str(e)}'
         }), 500
+
+@app.route('/train_model', methods=['POST'])
+def train_model_endpoint():
+    """训练模型并保存"""
+    try:
+        # 获取请求数据
+        file_upload = request.files.get('file')
+        model_type = request.form.get('model_type', 'roberta')
+        epochs = int(request.form.get('epochs', 10))
+        batch_size = int(request.form.get('batch_size', 32))
+        learning_rate = float(request.form.get('learning_rate', 0.001))
+        
+        # 验证模型类型是否有效
+        if model_type not in model_types:
+            return jsonify({'error': f'无效的模型类型: {model_type}'}), 400
+        
+        # 确保上传了文件
+        if not file_upload:
+            return jsonify({'error': '未上传训练数据文件'}), 400
+        
+        # 保存文件
+        filename = secure_filename(file_upload.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file_upload.save(filepath)
+        
+        # 尝试加载数据
+        features, labels = training.load_data(filepath)
+        
+        if features is None or labels is None or len(features) == 0 or len(labels) == 0:
+            return jsonify({'error': '无法从文件中加载有效的训练数据'}), 400
+        
+        # 确保有足够的数据
+        if len(features) < 50:
+            return jsonify({'error': f'训练数据不足，至少需要50条记录，当前仅有{len(features)}条'}), 400
+        
+        # 确保模型保存目录存在
+        saved_models_dir = os.path.join('ml', 'saved_models')
+        os.makedirs(saved_models_dir, exist_ok=True)
+        
+        # 生成时间戳
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        
+        # 设置模型保存路径
+        model_save_path = os.path.join(saved_models_dir, f"{model_type}_{timestamp}.pt")
+        
+        # 获取未训练的模型
+        model, _ = model_module.load_model(model_type)
+        
+        if model is None:
+            return jsonify({'error': f'无法初始化模型: {model_type}'}), 500
+        
+        # 开始训练
+        logging.info(f"开始训练模型 {model_type}, 数据量: {len(features)}, 轮数: {epochs}")
+        trained_model, metrics = training.train_model(
+            model, 
+            features, 
+            labels, 
+            model_type, 
+            model_save_path,
+            epochs=epochs,
+            batch_size=batch_size,
+            learning_rate=learning_rate
+        )
+        
+        # 删除上传的文件
+        os.remove(filepath)
+        
+        # 更新全局模型缓存
+        if trained_model is not None:
+            models[model_type] = trained_model
+            logging.info(f"训练完成，已更新全局模型缓存")
+        
+        # 返回训练结果
+        return jsonify({
+            'success': True,
+            'model_type': model_type,
+            'model_path': model_save_path,
+            'data_size': len(features),
+            'metrics': metrics,
+            'timestamp': timestamp
+        })
+            
+    except Exception as e:
+        logging.error(f"训练模型错误: {str(e)}")
+        logging.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/get_models', methods=['GET'])
+def get_models():
+    """获取所有可用的已保存模型"""
+    try:
+        saved_models_dir = os.path.join('ml', 'saved_models')
+        
+        # 如果目录不存在，创建它
+        os.makedirs(saved_models_dir, exist_ok=True)
+        
+        # 获取所有保存的模型
+        saved_models = {}
+        
+        for model_type in model_types:
+            saved_models[model_type] = []
+            
+            for filename in os.listdir(saved_models_dir):
+                if filename.startswith(f"{model_type}_") and filename.endswith(".pt"):
+                    # 从文件名中提取时间戳
+                    timestamp_str = filename.replace(f"{model_type}_", "").replace(".pt", "")
+                    
+                    # 尝试格式化时间戳
+                    try:
+                        date_obj = datetime.strptime(timestamp_str, '%Y%m%d_%H%M%S')
+                        date_formatted = date_obj.strftime('%Y-%m-%d %H:%M:%S')
+                    except:
+                        date_formatted = timestamp_str
+                    
+                    # 添加到模型列表
+                    saved_models[model_type].append({
+                        'filename': filename,
+                        'timestamp': timestamp_str,
+                        'date': date_formatted,
+                        'path': os.path.join(saved_models_dir, filename)
+                    })
+            
+            # 按时间戳排序（降序）
+            saved_models[model_type] = sorted(
+                saved_models[model_type], 
+                key=lambda x: x['timestamp'], 
+                reverse=True
+            )
+        
+        return jsonify({
+            'success': True,
+            'models': saved_models,
+            'current_models': {
+                model_type: (model is not None) 
+                for model_type, model in models.items()
+            }
+        })
+        
+    except Exception as e:
+        logging.error(f"获取模型列表错误: {str(e)}")
+        logging.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
 
 # 启动应用时创建表
 with app.app_context():

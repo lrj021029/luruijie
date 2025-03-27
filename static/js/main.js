@@ -37,6 +37,12 @@ function initEventListeners() {
     const uploadForm = document.getElementById('upload-form');
     if (uploadForm) {
         uploadForm.addEventListener('submit', handleFileUpload);
+        
+        // 文件选择变化时读取CSV头部
+        const fileInput = document.getElementById('file');
+        if (fileInput) {
+            fileInput.addEventListener('change', handleFileSelect);
+        }
     }
     
     // 历史记录搜索
@@ -364,6 +370,165 @@ function filterHistory() {
             row.style.display = '';
         } else {
             row.style.display = 'none';
+        }
+    });
+}
+
+// 处理文件选择，读取CSV头部并显示列选择界面
+async function handleFileSelect(event) {
+    const fileInput = event.target;
+    const file = fileInput.files[0];
+    const columnMapping = document.getElementById('column-mapping');
+    const resultContainer = document.getElementById('upload-result');
+    
+    // 隐藏之前的结果
+    resultContainer.classList.add('d-none');
+    
+    // 检查是否选择了文件
+    if (!file) {
+        columnMapping.style.display = 'none';
+        return;
+    }
+    
+    // 检查文件格式是否为CSV
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+        columnMapping.style.display = 'none';
+        resultContainer.innerHTML = `
+            <div class="alert alert-warning">
+                <strong>文件格式错误:</strong> 请上传CSV格式的文件
+            </div>
+        `;
+        resultContainer.classList.remove('d-none');
+        return;
+    }
+    
+    try {
+        // 读取CSV文件的前几行以获取列名
+        const reader = new FileReader();
+        
+        reader.onload = function(e) {
+            const content = e.target.result;
+            const lines = content.split('\n');
+            
+            if (lines.length === 0) {
+                throw new Error('文件为空');
+            }
+            
+            // 获取列名（假设第一行是标题行）
+            let headers = lines[0].split(',');
+            
+            // 如果使用引号包裹的CSV，去除引号
+            headers = headers.map(header => {
+                header = header.trim();
+                if (header.startsWith('"') && header.endsWith('"')) {
+                    return header.substring(1, header.length - 1);
+                }
+                return header;
+            });
+            
+            // 设置隐藏的文件名字段
+            document.getElementById('csv_filename').value = file.name;
+            
+            // 更新列选择下拉框
+            updateColumnSelects(headers);
+            
+            // 显示列映射区域
+            columnMapping.style.display = 'block';
+            
+            // 设置隐藏的映射模式字段为true
+            document.getElementById('mapping_mode').value = 'true';
+        };
+        
+        reader.onerror = function() {
+            throw new Error('读取文件失败');
+        };
+        
+        // 以文本形式读取文件
+        reader.readAsText(file);
+        
+    } catch (error) {
+        console.error('解析CSV头部错误:', error);
+        
+        columnMapping.style.display = 'none';
+        resultContainer.innerHTML = `
+            <div class="alert alert-danger">
+                <strong>错误:</strong> ${error.message || '解析CSV文件失败'}
+            </div>
+        `;
+        resultContainer.classList.remove('d-none');
+    }
+}
+
+// 更新列选择下拉框
+function updateColumnSelects(headers) {
+    // 获取所有列选择器
+    const textSelect = document.getElementById('text_column');
+    const labelSelect = document.getElementById('label_column');
+    const sendFreqSelect = document.getElementById('send_freq_column');
+    const isNightSelect = document.getElementById('is_night_column');
+    
+    // 清空下拉框选项
+    textSelect.innerHTML = '<option value="">-- 请选择 --</option>';
+    labelSelect.innerHTML = '<option value="">-- 无 --</option>';
+    sendFreqSelect.innerHTML = '<option value="">-- 无 --</option>';
+    isNightSelect.innerHTML = '<option value="">-- 无 --</option>';
+    
+    // 添加各列选项
+    headers.forEach(header => {
+        if (!header) return; // 跳过空列名
+        
+        const textOption = document.createElement('option');
+        textOption.value = header;
+        textOption.textContent = header;
+        
+        const labelOption = document.createElement('option');
+        labelOption.value = header;
+        labelOption.textContent = header;
+        
+        const sendFreqOption = document.createElement('option');
+        sendFreqOption.value = header;
+        sendFreqOption.textContent = header;
+        
+        const isNightOption = document.createElement('option');
+        isNightOption.value = header;
+        isNightOption.textContent = header;
+        
+        textSelect.appendChild(textOption);
+        labelSelect.appendChild(labelOption);
+        sendFreqSelect.appendChild(sendFreqOption);
+        isNightSelect.appendChild(isNightOption);
+    });
+    
+    // 尝试智能匹配列名
+    Array.from(textSelect.options).forEach(option => {
+        const lowerValue = option.value.toLowerCase();
+        if (lowerValue.includes('text') || lowerValue.includes('content') || lowerValue.includes('message') || 
+            lowerValue.includes('短信') || lowerValue.includes('内容') || lowerValue.includes('文本')) {
+            option.selected = true;
+        }
+    });
+    
+    Array.from(labelSelect.options).forEach(option => {
+        const lowerValue = option.value.toLowerCase();
+        if (lowerValue.includes('label') || lowerValue.includes('class') || lowerValue.includes('type') || 
+            lowerValue.includes('标签') || lowerValue.includes('分类')) {
+            option.selected = true;
+        }
+    });
+    
+    Array.from(sendFreqSelect.options).forEach(option => {
+        const lowerValue = option.value.toLowerCase();
+        if (lowerValue.includes('freq') || lowerValue.includes('frequency') || lowerValue.includes('rate') || 
+            lowerValue.includes('频率') || lowerValue.includes('频次')) {
+            option.selected = true;
+        }
+    });
+    
+    Array.from(isNightSelect.options).forEach(option => {
+        const lowerValue = option.value.toLowerCase();
+        if (lowerValue.includes('night') || lowerValue.includes('time') || lowerValue.includes('hour') || 
+            lowerValue.includes('夜间') || lowerValue.includes('时间')) {
+            option.selected = true;
         }
     });
 }

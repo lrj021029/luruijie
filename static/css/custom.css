@@ -205,6 +205,11 @@
     margin-right: 0.5rem;
 }
 
+.badge-ensemble {
+    background-color: #ff6b6b;
+    color: white;
+}
+
 .badge-roberta {
     background-color: #8884d8;
 }
@@ -219,6 +224,21 @@
 
 .badge-cnn {
     background-color: #a4de6c;
+}
+
+.badge-xlnet {
+    background-color: #9775fa;
+    color: white;
+}
+
+.badge-gpt {
+    background-color: #748ffc;
+    color: white;
+}
+
+.badge-attention_lstm {
+    background-color: #4bc0c0;
+    color: white;
 }
 
 .badge-svm {

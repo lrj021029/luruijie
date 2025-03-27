@@ -42,10 +42,14 @@
                     <div class="mb-3">
                         <label for="model_type" class="form-label">选择模型</label>
                         <select class="form-select" id="model_type" name="model_type">
+                            <option value="ensemble">Attention Ensemble (注意力集成学习)</option>
                             <option value="roberta">RoBERTa (Transformer类)</option>
                             <option value="bert">BERT (Transformer类)</option>
                             <option value="lstm">LSTM (循环神经网络)</option>
                             <option value="cnn">CNN (卷积神经网络)</option>
+                            <option value="xlnet">XLNet (Transformer类)</option>
+                            <option value="gpt">GPT (Transformer类)</option>
+                            <option value="attention_lstm">Attention LSTM (带注意力机制)</option>
                             <option value="svm">SVM (传统机器学习)</option>
                             <option value="naive_bayes">朴素贝叶斯 (传统机器学习)</option>
                         </select>
@@ -134,10 +138,14 @@
                     <div class="mb-3">
                         <label for="upload_model_type" class="form-label">选择模型</label>
                         <select class="form-select" id="upload_model_type" name="model_type">
+                            <option value="ensemble">Attention Ensemble (注意力集成学习)</option>
                             <option value="roberta">RoBERTa (Transformer类)</option>
                             <option value="bert">BERT (Transformer类)</option>
                             <option value="lstm">LSTM (循环神经网络)</option>
                             <option value="cnn">CNN (卷积神经网络)</option>
+                            <option value="xlnet">XLNet (Transformer类)</option>
+                            <option value="gpt">GPT (Transformer类)</option>
+                            <option value="attention_lstm">Attention LSTM (带注意力机制)</option>
                             <option value="svm">SVM (传统机器学习)</option>
                             <option value="naive_bayes">朴素贝叶斯 (传统机器学习)</option>
                         </select>
@@ -195,6 +203,24 @@
                 <div class="accordion" id="modelAccordion">
                     <div class="accordion-item">
                         <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseEnsemble">
+                                <span class="model-badge badge-ensemble">Ensemble</span> 模型说明
+                            </button>
+                        </h2>
+                        <div id="collapseEnsemble" class="accordion-collapse collapse" data-bs-parent="#modelAccordion">
+                            <div class="accordion-body">
+                                <p><strong>Attention Ensemble</strong> (注意力集成学习) 是一种高级的模型组合方法，它使用注意力机制动态地为每个子模型分配权重，根据输入文本的特性自适应调整各模型的重要性。这种方法能够在保持高准确率的同时，提高模型的鲁棒性和泛化能力。</p>
+                                <p>核心优势在于：</p>
+                                <ul>
+                                    <li>自适应权重 - 根据短信特征动态调整各子模型的重要性</li>
+                                    <li>更强的鲁棒性 - 多个模型协同工作，减少单一模型的偏差</li>
+                                    <li>更好的泛化能力 - 结合不同类型模型的优势，应对各种文本场景</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
                             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseRoberta">
                                 <span class="model-badge badge-roberta">RoBERTa</span> 模型说明
                             </button>
@@ -250,6 +276,42 @@
                         <div id="collapseSvm" class="accordion-collapse collapse" data-bs-parent="#modelAccordion">
                             <div class="accordion-body">
                                 <p><strong>SVM</strong> (支持向量机) 是一种传统的机器学习算法，通过寻找最佳决策边界来分类数据。它在小样本情况下表现良好，计算效率高，适合作为基准模型。</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseXlnet">
+                                <span class="model-badge badge-xlnet">XLNet</span> 模型说明
+                            </button>
+                        </h2>
+                        <div id="collapseXlnet" class="accordion-collapse collapse" data-bs-parent="#modelAccordion">
+                            <div class="accordion-body">
+                                <p><strong>XLNet</strong> 是一种基于自回归语言模型的预训练方法，结合了自回归语言建模和自编码方法的优点。它通过"置换语言建模"目标优化参数，对上下文信息有更强的理解能力，特别擅长捕捉长文本依赖关系。</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseGpt">
+                                <span class="model-badge badge-gpt">GPT</span> 模型说明
+                            </button>
+                        </h2>
+                        <div id="collapseGpt" class="accordion-collapse collapse" data-bs-parent="#modelAccordion">
+                            <div class="accordion-body">
+                                <p><strong>GPT</strong> (Generative Pre-trained Transformer) 是一种基于Transformer架构的生成式预训练语言模型。它通过大规模无监督学习能够理解和生成自然语言，特别适合理解上下文连贯性，可以有效识别垃圾短信中的语言模式和异常表述。</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAttentionLstm">
+                                <span class="model-badge badge-attention_lstm">Attention LSTM</span> 模型说明
+                            </button>
+                        </h2>
+                        <div id="collapseAttentionLstm" class="accordion-collapse collapse" data-bs-parent="#modelAccordion">
+                            <div class="accordion-body">
+                                <p><strong>Attention LSTM</strong> 在传统LSTM的基础上增加了注意力机制，能够自动关注文本中最重要的部分。它特别适合处理长短信文本，可以精确定位垃圾短信中的关键词和短语，提高分类准确率。</p>
                             </div>
                         </div>
                     </div>

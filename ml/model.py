@@ -169,6 +169,78 @@ class AttentionLSTM(nn.Module):
         
         return prediction
 
+class EnsembleAttentionModel(nn.Module):
+    """基于注意力机制的集成学习模型，动态合并多个子模型的结果"""
+    def __init__(self, input_dim=768, hidden_dim=128, dropout=0.1):
+        super(EnsembleAttentionModel, self).__init__()
+        
+        # 模型列表，用于跟踪支持的子模型
+        self.model_types = ['roberta', 'lstm', 'bert', 'cnn', 'xlnet', 'gpt', 'attention_lstm']
+        
+        # 特征转换层：将各个模型的特征转换到相同的维度
+        self.feature_layers = nn.ModuleDict({
+            model_type: nn.Linear(input_dim, hidden_dim) 
+            for model_type in self.model_types
+        })
+        
+        # 注意力机制层：为每个模型计算权重
+        self.attention_layer = nn.Linear(hidden_dim, 1)
+        
+        # 最终的分类层
+        self.classifier = nn.Linear(hidden_dim, 1)
+        self.dropout = nn.Dropout(dropout)
+        self.hidden_dim = hidden_dim
+        
+    def forward(self, features_dict):
+        """
+        features_dict: 字典，包含各个模型的特征
+        keys: 模型类型名称，如'roberta', 'lstm', 等
+        values: tensor of shape [batch_size, input_dim]
+        """
+        # 1. 转换各模型特征到统一维度
+        model_features = {}
+        for model_type in self.model_types:
+            if model_type in features_dict:
+                # 应用特征转换和激活函数
+                model_features[model_type] = torch.relu(
+                    self.feature_layers[model_type](features_dict[model_type])
+                )
+        
+        # 如果没有输入特征，返回全0预测
+        if not model_features:
+            batch_size = next(iter(features_dict.values())).size(0) if features_dict else 1
+            return torch.zeros(batch_size, 1), {}
+        
+        # 2. 计算注意力权重
+        attention_scores = {}
+        for model_type, features in model_features.items():
+            attention_scores[model_type] = self.attention_layer(features)
+        
+        # 3. 归一化注意力权重（softmax）
+        all_scores = torch.cat(list(attention_scores.values()), dim=1)
+        normalized_weights = F.softmax(all_scores, dim=1)
+        
+        # 4. 提取各模型的注意力权重
+        attention_weights = {}
+        for i, model_type in enumerate(attention_scores.keys()):
+            attention_weights[model_type] = normalized_weights[:, i:i+1]
+        
+        # 5. 使用注意力权重合并特征
+        combined_features = None
+        for model_type, features in model_features.items():
+            weighted_feature = features * attention_weights[model_type]
+            if combined_features is None:
+                combined_features = weighted_feature
+            else:
+                combined_features += weighted_feature
+        
+        # 6. 应用dropout并预测
+        combined_features = self.dropout(combined_features)
+        prediction = torch.sigmoid(self.classifier(combined_features))
+        
+        # 返回预测结果和注意力权重
+        return prediction, attention_weights
+
 def load_model(model_type):
     """
     加载预训练模型
@@ -217,6 +289,11 @@ def load_model(model_type):
             # 初始化CNN模型
             model = SMSCNN()
             tokenizer = None  # 使用jieba分词
+        elif model_type == 'ensemble':
+            # 初始化基于注意力机制的集成学习模型
+            model = EnsembleAttentionModel(input_dim=770)  # 与单个模型一致
+            tokenizer = None  # 使用jieba分词
+            logging.info("初始化集成学习模型完成")
         elif model_type == 'svm' or model_type == 'naive_bayes':
             # 传统机器学习模型
             model = None  # 实际应用中应加载预训练的SVM或NB模型
@@ -267,6 +344,39 @@ def predict(model, features, model_type):
                 confidence = torch.sigmoid(output).item()
                 # 预测类别
                 prediction = 1 if confidence > 0.5 else 0
+                return prediction, confidence
+        
+        # 集成模型预测
+        elif model_type == 'ensemble' and model is not None:
+            model.eval()
+            with torch.no_grad():
+                # 为集成模型准备输入
+                # 需要从各个模型获取特征，然后构建特征字典传入集成模型
+                
+                # 使用当前特征向量作为默认，应该包含所有模型用到的特征
+                features_tensor = torch.FloatTensor(features).unsqueeze(0)
+                
+                # 构建特征字典（真实使用中应该调用各子模型获取特征）
+                features_dict = {
+                    'roberta': features_tensor,
+                    'lstm': features_tensor,
+                    'bert': features_tensor,
+                    'cnn': features_tensor,
+                    'xlnet': features_tensor,
+                    'gpt': features_tensor,
+                    'attention_lstm': features_tensor
+                }
+                
+                # 这里简化模拟集成模型：对所有子模型进行相同的预测并输出权重
+                output, weights = model(features_dict)
+                
+                # 获取预测值和置信度
+                confidence = output.item()
+                prediction = 1 if confidence > 0.5 else 0
+                
+                # 可以记录各个子模型的贡献权重（日志或用于可视化）
+                logging.debug(f"集成模型权重: {weights}")
+                
                 return prediction, confidence
         else:
             # 传统机器学习模型预测

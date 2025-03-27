@@ -47,7 +47,7 @@ from models import SMSMessage
 # 初始化机器学习模型
 models = {}
 tokenizers = {}
-model_types = ["roberta", "lstm", "bert", "cnn", "xlnet", "gpt", "attention_lstm", "svm", "naive_bayes"]
+model_types = ["ensemble", "roberta", "lstm", "bert", "cnn", "xlnet", "gpt", "attention_lstm", "svm", "naive_bayes"]
 
 def load_models():
     """加载所有机器学习模型"""

@@ -10,7 +10,7 @@ document.addEventListener("DOMContentLoaded", function() {
     }
     
     // 如果在特征页面，加载词云数据
-    if (document.getElementById('wordcloud-container')) {
+    if (document.getElementById('spam-wordcloud') && document.getElementById('ham-wordcloud')) {
         loadWordCloudData();
     }
     
@@ -772,24 +772,6 @@ function renderWordCloud(container, words, color) {
     // 转换数据格式为WordCloud2.js需要的格式 [[word, weight], [word, weight]]
     const wordList = words.map(item => [item.word, item.value]);
     
-    // 词云配置
-    const options = {
-        list: wordList,
-        fontFamily: 'Pingfang SC, Source Sans Pro, Microsoft Yahei',
-        fontWeight: 'bold',
-        color: color,
-        minSize: 12,
-        weightFactor: 6,  // 增大权重因子使词云更明显
-        backgroundColor: 'transparent',
-        gridSize: 8,
-        drawOutOfBound: false,
-        hover: function(item, dimension) {
-            if (container.querySelector('.word-info')) {
-                container.querySelector('.word-info').textContent = `"${item[0]}" 出现 ${item[1]} 次`;
-            }
-        }
-    };
-    
     // 清空容器
     container.innerHTML = '';
     
@@ -806,6 +788,29 @@ function renderWordCloud(container, words, color) {
     console.log("词云数据示例:", wordList.slice(0, 5));
     
     try {
+        // 词云配置
+        const options = {
+            list: wordList,
+            fontFamily: 'Pingfang SC, Source Sans Pro, Microsoft Yahei',
+            fontWeight: 'bold',
+            color: color,
+            minSize: 12,
+            weightFactor: 6,  // 增大权重因子使词云更明显
+            backgroundColor: 'transparent',
+            gridSize: 8,
+            drawOutOfBound: false,
+            hover: function(item, dimension) {
+                if (container.querySelector('.word-info')) {
+                    container.querySelector('.word-info').textContent = `"${item[0]}" 出现 ${item[1]} 次`;
+                }
+            }
+        };
+        
+        // 检查全局WordCloud对象是否存在
+        if (typeof WordCloud === 'undefined') {
+            throw new Error('WordCloud库未加载');
+        }
+        
         // 渲染词云
         WordCloud(canvas, options);
     } catch (error) {

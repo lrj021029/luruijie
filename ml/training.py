@@ -130,18 +130,19 @@ def load_data(filepath, text_column='', label_column=''):
             
             # 判断是否为垃圾短信
             if label_str in ['1', 'spam', 'true', 'yes', '垃圾', '垃圾短信', 'junk']:
-                labels.append(1)  # 垃圾短信
+                labels.append(int(1))  # 垃圾短信
             elif label_str in ['0', 'ham', 'false', 'no', '正常', '正常短信', 'legitimate']:
-                labels.append(0)  # 正常短信
+                labels.append(int(0))  # 正常短信
             else:
                 # 对于其他值，尝试转换为数字
                 try:
                     numeric_label = float(label_str)
-                    labels.append(1 if numeric_label > 0.5 else 0)
+                    # 确保标签是整数类型，避免类型转换错误
+                    labels.append(int(1) if numeric_label > 0.5 else int(0))
                 except:
                     # 默认情况下，将无法识别的标签视为正常短信
                     logging.warning(f"无法识别的标签值: {label_str}，默认视为正常短信")
-                    labels.append(0)
+                    labels.append(int(0))
         
         # 添加元数据列（如果存在）
         if 'send_freq' in df.columns:

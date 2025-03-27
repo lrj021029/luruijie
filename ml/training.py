@@ -18,18 +18,26 @@ logging.basicConfig(level=logging.DEBUG)
 
 class SMSDataset(Dataset):
     """SMS数据集类，用于PyTorch DataLoader"""
-    def __init__(self, features, labels):
+    def __init__(self, features, labels, model_type=None):
         self.features = features
         self.labels = labels
+        self.model_type = model_type
     
     def __len__(self):
         return len(self.labels)
     
     def __getitem__(self, idx):
-        # 特征使用FloatTensor，标签使用FloatTensor（BCEWithLogitsLoss需要浮点数标签）
-        # 确保标签是浮点数
-        label = float(self.labels[idx])
-        return torch.FloatTensor(self.features[idx]), torch.tensor(label, dtype=torch.float)
+        # 根据不同的模型类型返回不同类型的张量
+        if self.model_type in ['lstm', 'attention_lstm', 'cnn']:
+            # 基于嵌入的模型需要整数型索引
+            feature = torch.tensor(self.features[idx], dtype=torch.long)
+        else:
+            # 其他模型使用浮点型特征
+            feature = torch.FloatTensor(self.features[idx])
+            
+        # 标签统一使用浮点型（适用于BCEWithLogitsLoss）
+        label = torch.tensor(float(self.labels[idx]), dtype=torch.float)
+        return feature, label
 
 def load_data(filepath, text_column='', label_column=''):
     """
@@ -291,9 +299,9 @@ def train_model(model, features, labels, model_type, model_save_path, epochs=10,
             # 划分训练集和测试集
             X_train, X_test, y_train, y_test = train_test_split(features, labels, test_size=0.2, random_state=42)
             
-            # 创建数据集和数据加载器
-            train_dataset = SMSDataset(X_train, y_train)
-            test_dataset = SMSDataset(X_test, y_test)
+            # 创建数据集和数据加载器，传入模型类型以正确处理张量类型
+            train_dataset = SMSDataset(X_train, y_train, model_type)
+            test_dataset = SMSDataset(X_test, y_test, model_type)
             
             train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
             test_loader = DataLoader(test_dataset, batch_size=batch_size)
@@ -426,9 +434,9 @@ def cross_validate(model_class, features, labels, model_type, n_folds=5, epochs=
             else:
                 model = model_class()  # LSTM或CNN模型
             
-            # 创建数据集和加载器
-            train_dataset = SMSDataset(X_train, y_train)
-            test_dataset = SMSDataset(X_test, y_test)
+            # 创建数据集和加载器，传入模型类型以处理正确的张量类型
+            train_dataset = SMSDataset(X_train, y_train, model_type)
+            test_dataset = SMSDataset(X_test, y_test, model_type)
             
             train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
             test_loader = DataLoader(test_dataset, batch_size=batch_size)

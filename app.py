@@ -52,7 +52,7 @@ tokenizers = {}
 model_types = ["ensemble", "roberta", "lstm", "bert", "cnn", "xlnet", "gpt", "attention_lstm", "svm", "naive_bayes"]
 
 def load_models():
-    """加载所有机器学习模型"""
+    """加载所有已训练的机器学习模型"""
     global models, tokenizers
     try:
         # 确保模型保存目录存在
@@ -82,13 +82,16 @@ def load_models():
             if latest_model_path and os.path.exists(latest_model_path):
                 logging.info(f"加载保存的模型: {latest_model_path}")
                 model, tokenizer = model_module.load_model(model_type, model_path=latest_model_path)
-            else:
-                # 否则加载默认模型
-                model, tokenizer = model_module.load_model(model_type)
                 
-            models[model_type] = model
-            tokenizers[model_type] = tokenizer
-            logging.info(f"{model_type} 模型加载完成")
+                # 将加载的模型和tokenizer添加到全局字典中
+                models[model_type] = model
+                tokenizers[model_type] = tokenizer
+                logging.info(f"{model_type} 模型加载完成")
+            else:
+                # 不再加载默认模型，而是设置为None
+                logging.info(f"{model_type} 模型未找到已训练的版本，需要先训练")
+                models[model_type] = None
+                tokenizers[model_type] = None
     except Exception as e:
         logging.error(f"模型加载失败: {str(e)}")
         logging.error(traceback.format_exc())
@@ -108,15 +111,40 @@ def predict():
         text = request.form.get('text', '')
         send_freq = float(request.form.get('send_freq', 0))
         is_night = int(request.form.get('is_night', 0))
-        model_type = request.form.get('model_type', 'roberta')
+        model_type = request.form.get('model_type', '')
+        model_path = request.form.get('model_path', '')
         
         if not text:
             return jsonify({'error': '请输入短信内容'}), 400
+        
+        if not model_type:
+            return jsonify({'error': '请选择一个模型'}), 400
         
         if model_type not in model_types:
             return jsonify({'error': '无效的模型类型'}), 400
         
         start_time = time.time()
+        
+        # 根据模型路径加载模型（如果提供了路径）
+        model_to_use = None
+        tokenizer_to_use = None
+        
+        if model_path:
+            # 构建完整的模型路径
+            full_path = os.path.join('ml', 'saved_models', model_path)
+            if os.path.exists(full_path):
+                logging.info(f"使用指定模型路径: {full_path}")
+                model_to_use, tokenizer_to_use = model_module.load_model(model_type, model_path=full_path)
+            else:
+                return jsonify({'error': f'模型文件未找到: {model_path}'}), 400
+        else:
+            # 使用全局加载的模型
+            model_to_use = models.get(model_type)
+            tokenizer_to_use = tokenizers.get(model_type)
+            
+            # 如果模型不存在
+            if model_to_use is None:
+                return jsonify({'error': f'请先训练 {model_type} 模型'}), 400
         
         # 预处理文本
         cleaned_text = preprocessing.clean_text(text)
@@ -124,13 +152,14 @@ def predict():
         # 提取特征
         features = feature_extraction.extract_features(
             cleaned_text, 
-            tokenizers.get(model_type), 
+            tokenizer_to_use, 
             send_freq, 
-            is_night
+            is_night,
+            model_type
         )
         
         # 预测
-        prediction, confidence = model_module.predict(models.get(model_type), features, model_type)
+        prediction, confidence = model_module.predict(model_to_use, features, model_type)
         
         # 计算预测时间
         pred_time = time.time() - start_time
@@ -257,10 +286,35 @@ def upload_file():
             df_processed['is_night'] = 0
         
         # 处理每一行
-        model_type = request.form.get('model_type', 'roberta')
+        model_type = request.form.get('model_type', '')
+        model_path = request.form.get('model_path', '')
+        
+        if not model_type:
+            return jsonify({'error': '请选择一个模型'}), 400
         
         if model_type not in model_types:
             return jsonify({'error': '无效的模型类型'}), 400
+        
+        # 根据模型路径加载模型（如果提供了路径）
+        model_to_use = None
+        tokenizer_to_use = None
+        
+        if model_path:
+            # 构建完整的模型路径
+            full_path = os.path.join('ml', 'saved_models', model_path)
+            if os.path.exists(full_path):
+                logging.info(f"批量处理使用指定模型路径: {full_path}")
+                model_to_use, tokenizer_to_use = model_module.load_model(model_type, model_path=full_path)
+            else:
+                return jsonify({'error': f'模型文件未找到: {model_path}'}), 400
+        else:
+            # 使用全局加载的模型
+            model_to_use = models.get(model_type)
+            tokenizer_to_use = tokenizers.get(model_type)
+            
+            # 如果模型不存在
+            if model_to_use is None:
+                return jsonify({'error': f'请先训练 {model_type} 模型'}), 400
         
         # 批量处理
         results = []
@@ -298,13 +352,14 @@ def upload_file():
                 # 特征提取
                 features = feature_extraction.extract_features(
                     cleaned_text, 
-                    tokenizers.get(model_type), 
+                    tokenizer_to_use, 
                     send_freq, 
-                    is_night
+                    is_night,
+                    model_type
                 )
                 
                 # 预测
-                prediction, confidence = model_module.predict(models.get(model_type), features, model_type)
+                prediction, confidence = model_module.predict(model_to_use, features, model_type)
             
             # 保存到数据库
             new_sms = SMSMessage(
@@ -478,12 +533,38 @@ def track_drift():
                 'note': '数据量不足，使用随机值'
             })
         
-        # 获取当前模型类型（默认使用 roberta）
-        current_model_type = request.args.get('model_type', 'roberta')
+        # 获取当前模型类型和模型路径
+        current_model_type = request.args.get('model_type', '')
+        model_path = request.args.get('model_path', '')
+        
         logging.info(f"当前请求的模型类型: {current_model_type}")
-        if current_model_type not in models:
-            current_model_type = 'roberta'
-            logging.warning(f"无效的模型类型，改用默认值: {current_model_type}")
+        
+        if not current_model_type:
+            return jsonify({'error': '请选择一个模型'}), 400
+            
+        if current_model_type not in model_types:
+            return jsonify({'error': f'无效的模型类型: {current_model_type}'}), 400
+        
+        # 根据模型路径加载模型（如果提供了路径）
+        model_to_use = None
+        tokenizer_to_use = None
+        
+        if model_path:
+            # 构建完整的模型路径
+            full_path = os.path.join('ml', 'saved_models', model_path)
+            if os.path.exists(full_path):
+                logging.info(f"漂移检测使用指定模型路径: {full_path}")
+                model_to_use, tokenizer_to_use = model_module.load_model(current_model_type, model_path=full_path)
+            else:
+                return jsonify({'error': f'模型文件未找到: {model_path}'}), 400
+        else:
+            # 使用全局加载的模型
+            model_to_use = models.get(current_model_type)
+            tokenizer_to_use = tokenizers.get(current_model_type)
+            
+            # 如果模型不存在
+            if model_to_use is None:
+                return jsonify({'error': f'请先训练 {current_model_type} 模型'}), 400
             
         # 获取最近1000条消息作为参考数据集（历史数据）
         reference_messages = SMSMessage.query.order_by(SMSMessage.timestamp).limit(1000).all()
@@ -494,8 +575,8 @@ def track_drift():
         drift_value, is_adapted = drift.detect_drift(
             [msg.text for msg in recent_messages],
             [msg.text for msg in reference_messages] if len(reference_messages) >= 10 else None,
-            tokenizers.get(current_model_type),
-            models.get(current_model_type),
+            tokenizer_to_use,
+            model_to_use,
             current_model_type
         )
         logging.info(f"漂移检测结果：漂移值={drift_value}, 是否已微调={is_adapted}")
@@ -515,7 +596,7 @@ def track_drift():
         return jsonify({
             'drift_value': 0.0,
             'is_adapted': False, 
-            'model_type': request.args.get('model_type', 'roberta'),
+            'model_type': request.args.get('model_type', ''),
             'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'error': str(e)
         })

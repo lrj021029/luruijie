@@ -14,14 +14,23 @@ document.addEventListener("DOMContentLoaded", function() {
         loadWordCloudData();
     }
     
-    // 如果在主页面，初始化模型指标图表
-    if (document.getElementById('model-metrics-chart')) {
-        loadModelMetrics();
-    }
-    
-    // 如果在主页面，初始化漂移图表
-    if (document.getElementById('drift-chart')) {
-        initDriftChart();
+    // 如果在主页面
+    if (window.location.pathname === "/" || window.location.pathname === "/index") {
+        // 加载已训练模型列表并填充下拉框
+        loadTrainedModelsForPrediction();
+        
+        // 初始化模型指标图表
+        if (document.getElementById('model-metrics-chart')) {
+            loadModelMetrics();
+        }
+        
+        // 初始化漂移图表
+        if (document.getElementById('drift-chart')) {
+            initDriftChart();
+        }
+        
+        // 恢复页面状态（如果有）
+        restorePageState('index');
     }
     
     // 如果有模型训练表单，设置相关事件
@@ -29,8 +38,8 @@ document.addEventListener("DOMContentLoaded", function() {
         setupModelTraining();
     }
     
-    // 如果有已保存模型容器，加载模型列表
-    if (document.getElementById('saved-models-container')) {
+    // 如果有已保存模型列表，加载模型列表
+    if (document.getElementById('saved-models-list')) {
         loadSavedModels();
     }
 });
@@ -92,6 +101,19 @@ async function handlePredictionSubmit(event) {
     const submitBtn = form.querySelector('button[type="submit"]');
     const resultContainer = document.getElementById('prediction-result');
     const loadingSpinner = document.getElementById('loading-spinner');
+    const modelSelect = document.getElementById('model-select');
+    
+    // 检查是否选择了模型
+    if (!modelSelect.value) {
+        resultContainer.innerHTML = `
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                <strong>请先选择模型!</strong> 在进行预测前，请先训练并选择一个模型。
+            </div>
+        `;
+        resultContainer.classList.remove('d-none');
+        return;
+    }
     
     // 显示加载动画
     loadingSpinner.classList.remove('d-none');
@@ -100,6 +122,12 @@ async function handlePredictionSubmit(event) {
     
     try {
         const formData = new FormData(form);
+        
+        // 添加模型路径信息，如果选项中有path数据属性
+        const selectedOption = modelSelect.options[modelSelect.selectedIndex];
+        if (selectedOption && selectedOption.dataset.path) {
+            formData.append('model_path', selectedOption.dataset.path);
+        }
         
         // 发送请求到后端API
         const response = await fetch('/predict', {
@@ -119,6 +147,9 @@ async function handlePredictionSubmit(event) {
         
         // 更新漂移图表
         updateDriftChart();
+        
+        // 保存当前页面状态（选择的模型等）
+        saveCurrentPageState('index');
         
     } catch (error) {
         console.error('预测错误:', error);
@@ -183,6 +214,19 @@ async function handleFileUpload(event) {
     const resultContainer = document.getElementById('upload-result');
     const loadingSpinner = document.getElementById('upload-spinner');
     const fileInput = form.querySelector('input[type="file"]');
+    const modelSelect = document.getElementById('upload-model-select');
+    
+    // 检查是否选择了模型
+    if (modelSelect && !modelSelect.value) {
+        resultContainer.innerHTML = `
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                <strong>请先选择模型!</strong> 在进行批量预测前，请先训练并选择一个模型。
+            </div>
+        `;
+        resultContainer.classList.remove('d-none');
+        return;
+    }
     
     // 检查是否选择了文件
     if (!fileInput.files || fileInput.files.length === 0) {
@@ -214,6 +258,14 @@ async function handleFileUpload(event) {
     
     try {
         const formData = new FormData(form);
+        
+        // 添加模型路径信息，如果选项中有path数据属性
+        if (modelSelect) {
+            const selectedOption = modelSelect.options[modelSelect.selectedIndex];
+            if (selectedOption && selectedOption.dataset.path) {
+                formData.append('model_path', selectedOption.dataset.path);
+            }
+        }
         
         // 发送请求到后端API
         const response = await fetch('/upload', {
@@ -270,6 +322,9 @@ async function handleFileUpload(event) {
         }
         
         resultContainer.classList.remove('d-none');
+        
+        // 保存当前页面状态
+        saveCurrentPageState('index');
         
     } catch (error) {
         console.error('上传错误:', error);
@@ -839,6 +894,165 @@ function renderWordCloud(container, words, color) {
     }
 }
 
+// 加载已训练模型列表并填充预测表单下拉菜单
+async function loadTrainedModelsForPrediction() {
+    const modelSelect = document.getElementById('model-select');
+    const uploadModelSelect = document.getElementById('upload-model-select');
+    const detectButton = document.getElementById('detect-button');
+    const uploadButton = document.getElementById('upload-button');
+    const noModelWarning = document.getElementById('no-model-warning');
+    
+    if (!modelSelect) {
+        console.log('模型选择框未找到');
+        return;
+    }
+    
+    try {
+        // 获取已训练模型列表
+        const response = await fetch('/get_models');
+        
+        if (!response.ok) {
+            throw new Error('获取已训练模型列表失败');
+        }
+        
+        const data = await response.json();
+        
+        // 清空现有选项，保留默认选项
+        modelSelect.innerHTML = '<option value="" disabled selected>-- 请先训练模型 --</option>';
+        if (uploadModelSelect) {
+            uploadModelSelect.innerHTML = '<option value="" disabled selected>-- 请先训练模型 --</option>';
+        }
+        
+        // 计算是否有已训练的模型
+        let hasTrainedModels = false;
+        let modelCount = 0;
+        
+        // 检查是否有训练好的模型
+        if (data && data.success && data.models) {
+            // 遍历所有模型类型
+            Object.keys(data.models).forEach(modelType => {
+                const models = data.models[modelType];
+                
+                if (models && models.length > 0) {
+                    hasTrainedModels = true;
+                    
+                    // 遍历当前类型的所有已训练模型
+                    models.forEach(modelInfo => {
+                        modelCount++;
+                        const modelName = getModelDisplayName(modelType);
+                        
+                        // 创建选项
+                        const option = document.createElement('option');
+                        option.value = modelType;
+                        option.textContent = `${modelName} (${modelInfo.date || modelInfo.timestamp})`;
+                        option.dataset.path = modelInfo.filename;
+                        
+                        // 添加到单条预测下拉菜单
+                        modelSelect.appendChild(option.cloneNode(true));
+                        
+                        // 添加到批量预测下拉菜单
+                        if (uploadModelSelect) {
+                            uploadModelSelect.appendChild(option.cloneNode(true));
+                        }
+                    });
+                }
+            });
+            
+            // 隐藏警告
+            if (hasTrainedModels) {
+                if (noModelWarning) noModelWarning.style.display = 'none';
+                
+                // 启用检测按钮
+                if (detectButton) detectButton.disabled = false;
+                if (uploadButton) uploadButton.disabled = false;
+                
+                // 如果URL中有模型类型参数，选中对应的选项
+                const urlParams = new URLSearchParams(window.location.search);
+                const modelTypeParam = urlParams.get('model_type');
+                
+                if (modelTypeParam) {
+                    const modelOptions = modelSelect.querySelectorAll(`option[value="${modelTypeParam}"]`);
+                    if (modelOptions && modelOptions.length > 0) {
+                        modelOptions[0].selected = true;
+                    }
+                    
+                    if (uploadModelSelect) {
+                        const uploadModelOptions = uploadModelSelect.querySelectorAll(`option[value="${modelTypeParam}"]`);
+                        if (uploadModelOptions && uploadModelOptions.length > 0) {
+                            uploadModelOptions[0].selected = true;
+                        }
+                    }
+                }
+                
+                console.log(`已加载 ${modelCount} 个已训练模型供使用`);
+            } else {
+                // 显示警告，没有训练好的模型
+                if (noModelWarning) noModelWarning.style.display = 'block';
+                
+                // 禁用检测按钮
+                if (detectButton) detectButton.disabled = true;
+                if (uploadButton) uploadButton.disabled = true;
+            }
+        } else {
+            // 显示警告，没有训练好的模型
+            if (noModelWarning) noModelWarning.style.display = 'block';
+            
+            // 禁用检测按钮
+            if (detectButton) detectButton.disabled = true;
+            if (uploadButton) uploadButton.disabled = true;
+        }
+    } catch (error) {
+        console.error('加载已训练模型列表错误:', error);
+        
+        // 显示错误消息
+        if (noModelWarning) {
+            noModelWarning.style.display = 'block';
+            noModelWarning.innerHTML = `
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>提示：</strong>请先训练模型才能进行预测
+                </div>
+            `;
+        }
+        
+        // 禁用检测按钮
+        if (detectButton) detectButton.disabled = true;
+        if (uploadButton) uploadButton.disabled = true;
+    }
+}
+
+// 格式化时间戳为可读形式
+function formatTimestamp(timestamp) {
+    if (!timestamp) return '';
+    
+    // 将YYYYMMDDhhmmss格式转换为YYYY-MM-DD hh:mm:ss
+    const year = timestamp.substring(0, 4);
+    const month = timestamp.substring(4, 6);
+    const day = timestamp.substring(6, 8);
+    const hour = timestamp.substring(8, 10) || '00';
+    const minute = timestamp.substring(10, 12) || '00';
+    
+    return `${year}-${month}-${day} ${hour}:${minute}`;
+}
+
+// 获取模型显示名称
+function getModelDisplayName(modelType) {
+    const modelNames = {
+        'roberta': 'RoBERTa',
+        'bert': 'BERT',
+        'lstm': 'LSTM',
+        'cnn': 'CNN',
+        'xlnet': 'XLNet',
+        'gpt': 'GPT',
+        'attention_lstm': 'Attention LSTM',
+        'svm': 'SVM',
+        'naive_bayes': '朴素贝叶斯',
+        'ensemble': 'Ensemble集成'
+    };
+    
+    return modelNames[modelType] || modelType;
+}
+
 // 加载模型指标数据
 async function loadModelMetrics() {
     const metricsContainer = document.getElementById('model-metrics-chart');
@@ -1054,12 +1268,40 @@ async function updateDriftChart() {
     if (!window.driftChart) return;
     
     try {
-        // 获取当前选择的模型类型
+        // 获取当前选择的模型类型和路径
         const modelSelect = document.getElementById('model-select');
-        const modelType = modelSelect ? modelSelect.value : 'roberta';
+        let modelType = '';
+        let modelPath = '';
         
-        // 发送请求到后端API，包含当前选择的模型类型
-        const response = await fetch(`/track_drift?model_type=${modelType}`);
+        if (modelSelect && modelSelect.selectedIndex > 0) {
+            const selectedOption = modelSelect.options[modelSelect.selectedIndex];
+            modelType = selectedOption.value;
+            modelPath = selectedOption.dataset.path || '';
+        }
+        
+        // 如果没有选择模型，则显示提示并返回
+        if (!modelType) {
+            const warningContainer = document.getElementById('drift-warning');
+            if (warningContainer) {
+                warningContainer.innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <strong>请先选择模型</strong>
+                        <p class="mb-0">漂移检测需要先选择一个已训练的模型才能使用。</p>
+                    </div>
+                `;
+            }
+            return;
+        }
+        
+        // 构建请求URL
+        let url = `/track_drift?model_type=${modelType}`;
+        if (modelPath) {
+            url += `&model_path=${modelPath}`;
+        }
+        
+        // 发送请求到后端API
+        const response = await fetch(url);
         
         // 即使响应不是200，我们也尝试解析JSON
         const data = await response.json();
@@ -1075,12 +1317,11 @@ async function updateDriftChart() {
                     <div class="alert alert-warning">
                         <i class="fas fa-exclamation-circle"></i>
                         <strong>漂移检测暂时不可用</strong>
-                        <p class="mb-0">数据不足或系统处理中，请稍后再试。</p>
+                        <p class="mb-0">数据不足或系统处理中，请稍后再试。${data.error ? `<br>错误信息: ${data.error}` : ''}</p>
                     </div>
                 `;
             }
-            
-            // 尽管出错，我们仍然继续使用返回的数据，因为我们已改进后端以总是返回合理的默认值
+            return;
         }
         
         const chart = window.driftChart;

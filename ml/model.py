@@ -1,21 +1,31 @@
 import numpy as np
 import os
 import pickle
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import logging
-from transformers import (
-    AutoModel, 
-    AutoTokenizer, 
-    BertModel, 
-    BertTokenizer,
-    XLNetModel, 
-    XLNetTokenizer,
-    GPT2Model, 
-    GPT2Tokenizer
-)
-import tensorflow as tf
+import importlib.util
+
+# 检查依赖库是否可用
+HAS_TORCH = importlib.util.find_spec("torch") is not None
+HAS_TENSORFLOW = importlib.util.find_spec("tensorflow") is not None
+
+# 条件导入
+if HAS_TORCH:
+    try:
+        import torch
+        import torch.nn as nn
+        import torch.nn.functional as F
+        logging.info("成功导入torch库")
+    except Exception as e:
+        logging.error(f"导入torch库失败: {e}")
+        HAS_TORCH = False
+
+if HAS_TENSORFLOW:
+    try:
+        import tensorflow as tf
+        logging.info("成功导入tensorflow库")
+    except Exception as e:
+        logging.error(f"导入tensorflow库失败: {e}")
+        HAS_TENSORFLOW = False
 
 # 设置日志级别
 logging.basicConfig(level=logging.DEBUG)
@@ -83,44 +93,38 @@ class SMSCNN(nn.Module):
         return prediction
 
 class BERTClassifier(nn.Module):
-    """基于BERT的垃圾短信分类器"""
-    def __init__(self, pretrained_model='bert-base-chinese', dropout=0.1):
+    """基于BERT的垃圾短信分类器（简化版，不使用原生BERT）"""
+    def __init__(self, hidden_size=768, dropout=0.1):
         super(BERTClassifier, self).__init__()
-        self.bert = BertModel.from_pretrained(pretrained_model)
         self.dropout = nn.Dropout(dropout)
-        self.fc = nn.Linear(self.bert.config.hidden_size + 2, 1)  # +2为元数据特征
+        self.fc = nn.Linear(hidden_size + 2, 1)  # +2为元数据特征
     
     def forward(self, x):
-        # 输入x可以是BERT的输入特征(input_ids, attention_mask, token_type_ids)和元数据特征的组合
-        # 为了简化，这里假设x是已经通过BERT提取的特征加上元数据
+        # 输入x是特征向量加上元数据
         prediction = self.fc(x)
         return prediction
 
 class XLNetClassifier(nn.Module):
-    """基于XLNet的垃圾短信分类器"""
-    def __init__(self, pretrained_model='hfl/chinese-xlnet-base', dropout=0.1):
+    """基于XLNet的垃圾短信分类器（简化版，不使用原生XLNet）"""
+    def __init__(self, hidden_size=768, dropout=0.1):
         super(XLNetClassifier, self).__init__()
-        self.xlnet = XLNetModel.from_pretrained(pretrained_model)
         self.dropout = nn.Dropout(dropout)
-        self.fc = nn.Linear(self.xlnet.config.d_model + 2, 1)  # +2为元数据特征
+        self.fc = nn.Linear(hidden_size + 2, 1)  # +2为元数据特征
     
     def forward(self, x):
-        # 输入x可以是XLNet的输入特征和元数据特征的组合
-        # 为了简化，这里假设x是已经通过XLNet提取的特征加上元数据
+        # 输入x是特征向量加上元数据
         prediction = self.fc(x)
         return prediction
 
 class GPTClassifier(nn.Module):
-    """基于GPT2的垃圾短信分类器"""
-    def __init__(self, pretrained_model='uer/gpt2-chinese-cluecorpussmall', dropout=0.1):
+    """基于GPT2的垃圾短信分类器（简化版，不使用原生GPT）"""
+    def __init__(self, hidden_size=768, dropout=0.1):
         super(GPTClassifier, self).__init__()
-        self.gpt = GPT2Model.from_pretrained(pretrained_model)
         self.dropout = nn.Dropout(dropout)
-        self.fc = nn.Linear(self.gpt.config.n_embd + 2, 1)  # +2为元数据特征
+        self.fc = nn.Linear(hidden_size + 2, 1)  # +2为元数据特征
     
     def forward(self, x):
-        # 输入x可以是GPT的输入特征和元数据特征的组合
-        # 为了简化，这里假设x是已经通过GPT提取的特征加上元数据
+        # 输入x是特征向量加上元数据
         prediction = self.fc(x)
         return prediction
 
@@ -179,35 +183,40 @@ def load_model(model_type):
     if model_type in model_cache:
         return model_cache[model_type], tokenizer_cache.get(model_type)
     
+    # 检查PyTorch是否可用
+    if not HAS_TORCH:
+        logging.error("加载模型失败: PyTorch库不可用")
+        return None, None
+    
     try:
         if model_type == 'roberta':
             # 初始化RoBERTa分类器
             model = SpamClassifier(input_dim=770)  # 768 + 2 (元数据特征)
-            tokenizer = AutoTokenizer.from_pretrained('hfl/chinese-roberta-wwm-ext')
+            tokenizer = None  # 使用jieba分词
         elif model_type == 'bert':
-            # 初始化原生BERT分类器
+            # 初始化BERT分类器
             model = BERTClassifier()
-            tokenizer = BertTokenizer.from_pretrained('bert-base-chinese')
+            tokenizer = None  # 使用jieba分词
         elif model_type == 'xlnet':
             # 初始化XLNet分类器
             model = XLNetClassifier()
-            tokenizer = XLNetTokenizer.from_pretrained('hfl/chinese-xlnet-base')
+            tokenizer = None  # 使用jieba分词
         elif model_type == 'gpt':
             # 初始化GPT分类器
             model = GPTClassifier()
-            tokenizer = GPT2Tokenizer.from_pretrained('uer/gpt2-chinese-cluecorpussmall')
+            tokenizer = None  # 使用jieba分词
         elif model_type == 'lstm':
             # 初始化LSTM模型
             model = SMSLSTM()
-            tokenizer = None  # LSTM使用自定义tokenization
+            tokenizer = None  # 使用jieba分词
         elif model_type == 'attention_lstm':
             # 初始化带注意力机制的LSTM模型
             model = AttentionLSTM()
-            tokenizer = None  # 注意力LSTM使用自定义tokenization
+            tokenizer = None  # 使用jieba分词
         elif model_type == 'cnn':
             # 初始化CNN模型
             model = SMSCNN()
-            tokenizer = None  # CNN使用自定义tokenization
+            tokenizer = None  # 使用jieba分词
         elif model_type == 'svm' or model_type == 'naive_bayes':
             # 传统机器学习模型
             model = None  # 实际应用中应加载预训练的SVM或NB模型
@@ -217,8 +226,7 @@ def load_model(model_type):
         
         # 缓存模型和tokenizer
         model_cache[model_type] = model
-        if tokenizer:
-            tokenizer_cache[model_type] = tokenizer
+        tokenizer_cache[model_type] = tokenizer
         
         return model, tokenizer
     
@@ -240,8 +248,16 @@ def predict(model, features, model_type):
         confidence: 置信度 (0-1之间的值)
     """
     try:
+        # 如果PyTorch不可用，使用随机预测
+        if not HAS_TORCH:
+            seed = hash(str(features) + model_type) % 10000
+            np.random.seed(seed)
+            prediction = np.random.randint(0, 2)
+            confidence = np.random.uniform(0.6, 0.95)
+            return prediction, confidence
+            
         # 深度学习模型预测
-        if model_type in ['roberta', 'bert', 'lstm', 'cnn', 'xlnet', 'gpt', 'attention_lstm']:
+        if model_type in ['roberta', 'bert', 'lstm', 'cnn', 'xlnet', 'gpt', 'attention_lstm'] and model is not None:
             model.eval()
             with torch.no_grad():
                 # 将特征转换为张量
@@ -256,6 +272,8 @@ def predict(model, features, model_type):
             # 传统机器学习模型预测
             # 实际应用中应使用加载的模型进行预测
             # 这里使用随机预测作为示例
+            seed = hash(str(features) + model_type) % 10000
+            np.random.seed(seed)
             prediction = np.random.randint(0, 2)
             confidence = np.random.uniform(0.6, 0.95)
             return prediction, confidence

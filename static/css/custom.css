@@ -1,0 +1,250 @@
+/* 自定义样式 */
+
+/* 全局样式 */
+:root {
+    --primary-color: #4a89dc;
+    --success-color: #37bc9b;
+    --danger-color: #da4453;
+    --warning-color: #e9c154;
+    --info-color: #4fc0e8;
+    --dark-color: #343a40;
+    --light-color: #f8f9fa;
+}
+
+/* 应用内容区域设置最小高度，避免短页面 */
+.app-content {
+    min-height: calc(100vh - 140px);
+    padding: 2rem 0;
+}
+
+/* 标题样式 */
+.page-title {
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--primary-color);
+}
+
+/* 卡片和表单增强 */
+.card {
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.15);
+    transform: translateY(-2px);
+}
+
+/* 预测结果卡片 */
+.result-card {
+    transition: all 0.3s ease;
+}
+
+.result-card.spam {
+    border-color: var(--danger-color);
+}
+
+.result-card.ham {
+    border-color: var(--success-color);
+}
+
+/* 表单控件 */
+.form-control:focus, .form-select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.25rem rgba(74, 137, 220, 0.25);
+}
+
+/* 按钮样式增强 */
+.btn {
+    border-radius: 0.25rem;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.btn-primary:hover {
+    background-color: #3a79cc;
+    border-color: #3a79cc;
+}
+
+/* 加载动画 */
+.spinner-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 2rem;
+}
+
+/* 词云容器 */
+.wordcloud-container {
+    height: 350px;
+    background-color: rgba(0, 0, 0, 0.05);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin-bottom: 2rem;
+}
+
+/* 历史记录表格 */
+.history-table th, .history-table td {
+    vertical-align: middle;
+}
+
+.search-bar {
+    margin-bottom: 1.5rem;
+}
+
+/* 图表容器 */
+.chart-container {
+    background-color: rgba(0, 0, 0, 0.03);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin-bottom: 2rem;
+}
+
+/* 模型卡片 */
+.model-card {
+    border-left: 4px solid var(--primary-color);
+    border-radius: 0.25rem;
+    margin-bottom: 1rem;
+    transition: all 0.2s;
+}
+
+.model-card:hover {
+    border-left-width: 8px;
+}
+
+/* 导航栏和页脚 */
+.navbar {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.footer {
+    margin-top: 2rem;
+    padding: 1.5rem 0;
+    background-color: var(--dark-color);
+    color: white;
+}
+
+/* 暗色模式调整 */
+[data-bs-theme="dark"] .card {
+    background-color: #2b3035;
+}
+
+[data-bs-theme="dark"] .wordcloud-container,
+[data-bs-theme="dark"] .chart-container {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+[data-bs-theme="dark"] .table-hover tbody tr:hover {
+    background-color: rgba(255, 255, 255, 0.075);
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .model-selection {
+        flex-direction: column;
+    }
+    
+    .wordcloud-container {
+        height: 250px;
+    }
+}
+
+/* 主题切换按钮 */
+.theme-switcher {
+    cursor: pointer;
+    font-size: 1.5rem;
+    transition: transform 0.3s ease;
+}
+
+.theme-switcher:hover {
+    transform: rotate(30deg);
+}
+
+/* 模型特征标记 */
+.model-badge {
+    font-size: 0.75rem;
+    padding: 0.35em 0.65em;
+    border-radius: 0.25rem;
+    margin-right: 0.5rem;
+}
+
+.badge-roberta {
+    background-color: #8884d8;
+}
+
+.badge-lstm {
+    background-color: #82ca9d;
+}
+
+.badge-bert {
+    background-color: #8dd1e1;
+}
+
+.badge-cnn {
+    background-color: #a4de6c;
+}
+
+.badge-svm {
+    background-color: #d0ed57;
+}
+
+.badge-naive_bayes {
+    background-color: #ffc658;
+}
+
+/* 动画效果 */
+.fade-in {
+    animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+    0% { opacity: 0; }
+    100% { opacity: 1; }
+}
+
+/* 波浪动画加载效果 */
+.wave-loading {
+    display: inline-block;
+    position: relative;
+    width: 80px;
+    height: 80px;
+}
+
+.wave-loading div {
+    display: inline-block;
+    position: absolute;
+    left: 8px;
+    width: 16px;
+    background: var(--primary-color);
+    animation: wave-loading 1.2s cubic-bezier(0, 0.5, 0.5, 1) infinite;
+}
+
+.wave-loading div:nth-child(1) {
+    left: 8px;
+    animation-delay: -0.24s;
+}
+.wave-loading div:nth-child(2) {
+    left: 32px;
+    animation-delay: -0.12s;
+}
+.wave-loading div:nth-child(3) {
+    left: 56px;
+    animation-delay: 0;
+}
+
+@keyframes wave-loading {
+    0% {
+        top: 8px;
+        height: 64px;
+    }
+    50%, 100% {
+        top: 24px;
+        height: 32px;
+    }
+}

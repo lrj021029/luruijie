@@ -1,0 +1,275 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="page-title">
+            <i class="fas fa-robot me-2"></i>垃圾短信智能识别系统
+        </h1>
+    </div>
+</div>
+
+<div class="row">
+    <!-- 左侧 - 短信输入和预测部分 -->
+    <div class="col-lg-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-search me-2"></i>短信检测</h5>
+            </div>
+            <div class="card-body">
+                <form id="prediction-form" action="/predict" method="post">
+                    <div class="mb-3">
+                        <label for="text" class="form-label">短信内容</label>
+                        <textarea class="form-control" id="text" name="text" rows="4" required placeholder="请输入需要检测的短信内容..."></textarea>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="send_freq" class="form-label">发送频率 (每天)</label>
+                            <input type="number" class="form-control" id="send_freq" name="send_freq" min="0" max="100" value="0" step="0.1">
+                            <div class="form-text">从该号码收到短信的频率（每天）</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="is_night" class="form-label">是否夜间发送</label>
+                            <select class="form-select" id="is_night" name="is_night">
+                                <option value="0">否 (6:00-22:00)</option>
+                                <option value="1">是 (22:00-6:00)</option>
+                            </select>
+                            <div class="form-text">收到短信的时间是否在夜间</div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="model_type" class="form-label">选择模型</label>
+                        <select class="form-select" id="model_type" name="model_type">
+                            <option value="roberta">RoBERTa (Transformer类)</option>
+                            <option value="bert">BERT (Transformer类)</option>
+                            <option value="lstm">LSTM (循环神经网络)</option>
+                            <option value="cnn">CNN (卷积神经网络)</option>
+                            <option value="svm">SVM (传统机器学习)</option>
+                            <option value="naive_bayes">朴素贝叶斯 (传统机器学习)</option>
+                        </select>
+                        <div class="form-text">选择用于识别的机器学习模型</div>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-filter me-2"></i>检测垃圾短信
+                        </button>
+                    </div>
+                </form>
+                
+                <!-- 加载中动画 -->
+                <div id="loading-spinner" class="spinner-container d-none">
+                    <div class="wave-loading">
+                        <div></div>
+                        <div></div>
+                        <div></div>
+                    </div>
+                    <p class="text-center mt-2">正在分析短信内容...</p>
+                </div>
+                
+                <!-- 预测结果区域 -->
+                <div id="prediction-result" class="mt-4 d-none">
+                    <!-- 结果将通过JS动态填充 -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- 文件上传卡片 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-file-csv me-2"></i>批量检测 (CSV)</h5>
+            </div>
+            <div class="card-body">
+                <form id="upload-form" action="/upload" method="post" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="file" class="form-label">上传CSV文件</label>
+                        <input type="file" class="form-control" id="file" name="file" accept=".csv" required>
+                        <div class="form-text">CSV文件必须包含以下列: text, send_freq, is_night</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="upload_model_type" class="form-label">选择模型</label>
+                        <select class="form-select" id="upload_model_type" name="model_type">
+                            <option value="roberta">RoBERTa (Transformer类)</option>
+                            <option value="bert">BERT (Transformer类)</option>
+                            <option value="lstm">LSTM (循环神经网络)</option>
+                            <option value="cnn">CNN (卷积神经网络)</option>
+                            <option value="svm">SVM (传统机器学习)</option>
+                            <option value="naive_bayes">朴素贝叶斯 (传统机器学习)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-outline-primary">
+                            <i class="fas fa-upload me-2"></i>上传并批量检测
+                        </button>
+                    </div>
+                </form>
+                
+                <!-- 加载中动画 -->
+                <div id="upload-spinner" class="spinner-container d-none">
+                    <div class="wave-loading">
+                        <div></div>
+                        <div></div>
+                        <div></div>
+                    </div>
+                    <p class="text-center mt-2">正在处理文件...</p>
+                </div>
+                
+                <!-- 上传结果区域 -->
+                <div id="upload-result" class="mt-4 d-none">
+                    <!-- 结果将通过JS动态填充 -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 右侧 - 模型对比和漂移检测 -->
+    <div class="col-lg-6">
+        <!-- 模型指标对比卡片 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>模型性能对比</h5>
+            </div>
+            <div class="card-body">
+                <!-- 加载中动画 -->
+                <div id="metrics-spinner" class="spinner-container">
+                    <div class="wave-loading">
+                        <div></div>
+                        <div></div>
+                        <div></div>
+                    </div>
+                    <p class="text-center mt-2">加载模型指标数据...</p>
+                </div>
+                
+                <!-- 模型指标图表 -->
+                <div id="model-metrics-chart" class="chart-container">
+                    <!-- 图表将通过JS动态生成 -->
+                </div>
+                
+                <!-- 模型简介 -->
+                <div class="accordion" id="modelAccordion">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseRoberta">
+                                <span class="model-badge badge-roberta">RoBERTa</span> 模型说明
+                            </button>
+                        </h2>
+                        <div id="collapseRoberta" class="accordion-collapse collapse" data-bs-parent="#modelAccordion">
+                            <div class="accordion-body">
+                                <p><strong>RoBERTa</strong> (Robustly Optimized BERT Pretraining Approach) 是对BERT的改进版本，通过更优化的训练方法提高了性能。它在自然语言处理任务中表现优异，特别适合复杂的文本分类任务。</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseBert">
+                                <span class="model-badge badge-bert">BERT</span> 模型说明
+                            </button>
+                        </h2>
+                        <div id="collapseBert" class="accordion-collapse collapse" data-bs-parent="#modelAccordion">
+                            <div class="accordion-body">
+                                <p><strong>BERT</strong> (Bidirectional Encoder Representations from Transformers) 是一种预训练的语言模型，能够理解单词在上下文中的含义。它利用双向训练方法理解文本，能有效捕捉短信内容的语义信息。</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseLstm">
+                                <span class="model-badge badge-lstm">LSTM</span> 模型说明
+                            </button>
+                        </h2>
+                        <div id="collapseLstm" class="accordion-collapse collapse" data-bs-parent="#modelAccordion">
+                            <div class="accordion-body">
+                                <p><strong>LSTM</strong> (Long Short-Term Memory) 是一种特殊的循环神经网络，擅长处理序列数据和长期依赖关系。它能够有效地记忆长序列中的重要信息，适合处理短信这类文本序列。</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseCnn">
+                                <span class="model-badge badge-cnn">CNN</span> 模型说明
+                            </button>
+                        </h2>
+                        <div id="collapseCnn" class="accordion-collapse collapse" data-bs-parent="#modelAccordion">
+                            <div class="accordion-body">
+                                <p><strong>CNN</strong> (卷积神经网络) 通过卷积层提取文本的局部特征。它能够识别短信中的关键词组和短语模式，对于垃圾短信中常见的特征词汇和句式有很好的检测能力。</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSvm">
+                                <span class="model-badge badge-svm">SVM</span> 模型说明
+                            </button>
+                        </h2>
+                        <div id="collapseSvm" class="accordion-collapse collapse" data-bs-parent="#modelAccordion">
+                            <div class="accordion-body">
+                                <p><strong>SVM</strong> (支持向量机) 是一种传统的机器学习算法，通过寻找最佳决策边界来分类数据。它在小样本情况下表现良好，计算效率高，适合作为基准模型。</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseNb">
+                                <span class="model-badge badge-naive_bayes">朴素贝叶斯</span> 模型说明
+                            </button>
+                        </h2>
+                        <div id="collapseNb" class="accordion-collapse collapse" data-bs-parent="#modelAccordion">
+                            <div class="accordion-body">
+                                <p><strong>朴素贝叶斯</strong>基于贝叶斯定理和特征条件独立假设，计算高效简单。它在文本分类任务中表现稳定，尤其适合处理垃圾邮件和短信分类问题，是经典的文本分类算法。</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 语义漂移检测卡片 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>语义漂移检测</h5>
+            </div>
+            <div class="card-body">
+                <!-- 漂移图表 -->
+                <div id="drift-chart" class="chart-container">
+                    <!-- 图表将通过JS动态生成 -->
+                </div>
+                
+                <!-- 漂移警告区域 -->
+                <div id="drift-warning" class="mt-3">
+                    <!-- 警告将通过JS动态生成 -->
+                </div>
+                
+                <div class="mt-3">
+                    <h6>什么是语义漂移?</h6>
+                    <p>语义漂移指随着时间推移，短信内容的分布特征发生变化的现象。这可能由于垃圾短信发送者改变策略、新型垃圾短信出现或用户行为变化导致。监测漂移可以及时发现模型性能下降，提示何时需要重新训练模型。</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 闪现消息 -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+      {% for category, message in messages %}
+        <div class="toast show" role="alert" aria-live="assertive" aria-atomic="true">
+          <div class="toast-header {% if category == 'success' %}bg-success text-white{% elif category == 'danger' %}bg-danger text-white{% endif %}">
+            <strong class="me-auto">
+              {% if category == 'success' %}✓ 成功{% elif category == 'danger' %}❌ 错误{% else %}ℹ️ 提示{% endif %}
+            </strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+          </div>
+          <div class="toast-body">
+            {{ message }}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+{% endblock %}

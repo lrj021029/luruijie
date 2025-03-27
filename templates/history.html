@@ -1,0 +1,401 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="page-title">
+            <i class="fas fa-history me-2"></i>预测历史记录
+        </h1>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-search me-2"></i>历史记录搜索</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="input-group mb-3">
+                            <span class="input-group-text"><i class="fas fa-filter"></i></span>
+                            <input type="text" class="form-control" id="search-input" placeholder="输入关键词搜索短信内容、预测结果或模型类型...">
+                            <button class="btn btn-outline-secondary" type="button" onclick="filterHistory()">搜索</button>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-flex justify-content-end">
+                            <div class="btn-group" role="group">
+                                <button type="button" class="btn btn-outline-success" onclick="filterByResult('正常短信')">仅查看正常短信</button>
+                                <button type="button" class="btn btn-outline-danger" onclick="filterByResult('垃圾短信')">仅查看垃圾短信</button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="resetFilter()">重置</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-list me-2"></i>预测记录</h5>
+            </div>
+            <div class="card-body">
+                <!-- 加载中动画 -->
+                <div id="history-spinner" class="spinner-container">
+                    <div class="wave-loading">
+                        <div></div>
+                        <div></div>
+                        <div></div>
+                    </div>
+                    <p class="text-center mt-2">加载历史记录...</p>
+                </div>
+                
+                <div class="table-responsive">
+                    <table id="history-table" class="table table-striped table-hover history-table">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>#</th>
+                                <th>短信内容</th>
+                                <th>发送频率</th>
+                                <th>夜间发送</th>
+                                <th>预测结果</th>
+                                <th>置信度</th>
+                                <th>使用模型</th>
+                                <th>时间</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- 数据将通过JS动态加载 -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- 分页控件 -->
+                <nav aria-label="历史记录分页" class="mt-4">
+                    <ul class="pagination justify-content-center" id="pagination">
+                        <!-- 分页将根据记录数量动态生成 -->
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>预测结果分布</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="results-chart" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>模型使用统计</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="models-chart" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 详细信息模态框 -->
+<div class="modal fade" id="detailModal" tabindex="-1" aria-labelledby="detailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="detailModalLabel">短信详细信息</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body" id="detail-content">
+                <!-- 详细内容将通过JS动态填充 -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// 历史记录页面的特定脚本
+document.addEventListener("DOMContentLoaded", function() {
+    // 加载历史记录
+    loadHistory();
+    
+    // 为表格行添加点击事件（委托事件）
+    document.getElementById('history-table').addEventListener('click', function(e) {
+        // 找到最近的tr父元素
+        const row = e.target.closest('tr');
+        if (row && row.dataset.id) {
+            showDetails(row.dataset.id);
+        }
+    });
+});
+
+// 按预测结果筛选
+function filterByResult(result) {
+    const rows = document.querySelectorAll('#history-table tbody tr');
+    
+    rows.forEach(row => {
+        const predictionCell = row.cells[4];
+        if (predictionCell && predictionCell.textContent === result) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+    
+    // 更新图表
+    updateCharts();
+}
+
+// 重置筛选
+function resetFilter() {
+    const rows = document.querySelectorAll('#history-table tbody tr');
+    rows.forEach(row => row.style.display = '');
+    document.getElementById('search-input').value = '';
+    
+    // 更新图表
+    updateCharts();
+}
+
+// 显示详细信息
+function showDetails(id) {
+    // 找到对应行
+    const row = document.querySelector(`tr[data-id="${id}"]`);
+    if (!row) return;
+    
+    // 提取单元格数据
+    const text = row.cells[1].textContent;
+    const sendFreq = row.cells[2].textContent;
+    const isNight = row.cells[3].textContent;
+    const prediction = row.cells[4].textContent;
+    const confidence = row.cells[5].textContent;
+    const model = row.cells[6].textContent;
+    const timestamp = row.cells[7].textContent;
+    
+    // 设置模态框标题
+    document.getElementById('detailModalLabel').textContent = 
+        `${prediction === '垃圾短信' ? '⚠️ 垃圾短信' : '✓ 正常短信'} 详细信息`;
+    
+    // 设置模态框内容
+    const detailContent = document.getElementById('detail-content');
+    
+    // 设置卡片类型
+    const cardClass = prediction === '垃圾短信' ? 'border-danger' : 'border-success';
+    const headerClass = prediction === '垃圾短信' ? 'bg-danger' : 'bg-success';
+    
+    detailContent.innerHTML = `
+        <div class="card ${cardClass} mb-3">
+            <div class="card-header ${headerClass} text-white">
+                <strong>预测结果:</strong> ${prediction}（置信度: ${confidence}）
+            </div>
+            <div class="card-body">
+                <h5 class="card-title">短信内容</h5>
+                <p class="card-text">${text}</p>
+                
+                <hr>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>发送频率:</strong> ${sendFreq}</p>
+                        <p><strong>夜间发送:</strong> ${isNight}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>使用模型:</strong> ${model}</p>
+                        <p><strong>预测时间:</strong> ${timestamp}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>
+            <strong>提示:</strong> 您可以在首页尝试使用不同的模型对相同短信进行检测，比较各模型的性能差异。
+        </div>
+    `;
+    
+    // 显示模态框
+    new bootstrap.Modal(document.getElementById('detailModal')).show();
+}
+
+// 更新结果分布和模型使用统计图表
+function updateCharts() {
+    // 获取当前可见行
+    const visibleRows = Array.from(document.querySelectorAll('#history-table tbody tr'))
+        .filter(row => row.style.display !== 'none');
+    
+    // 计算预测结果分布
+    const spamCount = visibleRows.filter(row => row.cells[4].textContent === '垃圾短信').length;
+    const hamCount = visibleRows.filter(row => row.cells[4].textContent === '正常短信').length;
+    
+    // 计算模型使用统计
+    const modelCounts = {};
+    visibleRows.forEach(row => {
+        const model = row.cells[6].textContent;
+        modelCounts[model] = (modelCounts[model] || 0) + 1;
+    });
+    
+    // 更新结果分布图表
+    if (window.resultsChart) {
+        window.resultsChart.destroy();
+    }
+    
+    const resultsCtx = document.getElementById('results-chart').getContext('2d');
+    window.resultsChart = new Chart(resultsCtx, {
+        type: 'pie',
+        data: {
+            labels: ['垃圾短信', '正常短信'],
+            datasets: [{
+                data: [spamCount, hamCount],
+                backgroundColor: ['#dc3545', '#28a745'],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'right'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const total = spamCount + hamCount;
+                            const percentage = Math.round((context.raw / total) * 100);
+                            return `${context.label}: ${context.raw} (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+    
+    // 更新模型使用统计图表
+    if (window.modelsChart) {
+        window.modelsChart.destroy();
+    }
+    
+    const modelsCtx = document.getElementById('models-chart').getContext('2d');
+    window.modelsChart = new Chart(modelsCtx, {
+        type: 'bar',
+        data: {
+            labels: Object.keys(modelCounts),
+            datasets: [{
+                label: '使用次数',
+                data: Object.values(modelCounts),
+                backgroundColor: [
+                    '#8884d8', '#82ca9d', '#8dd1e1', 
+                    '#a4de6c', '#d0ed57', '#ffc658'
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        precision: 0
+                    }
+                }
+            }
+        }
+    });
+}
+
+// 扩展loadHistory函数
+async function loadHistory() {
+    const historyTable = document.getElementById('history-table');
+    const tableBody = historyTable.querySelector('tbody');
+    const loadingSpinner = document.getElementById('history-spinner');
+    
+    // 显示加载动画
+    loadingSpinner.classList.remove('d-none');
+    
+    try {
+        // 发送请求到后端API
+        const response = await fetch('/get_history');
+        
+        if (!response.ok) {
+            throw new Error('获取历史记录失败');
+        }
+        
+        const data = await response.json();
+        
+        // 清空表格
+        tableBody.innerHTML = '';
+        
+        // 填充表格
+        if (data.length === 0) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="8" class="text-center">暂无记录</td>
+                </tr>
+            `;
+        } else {
+            data.forEach((item, index) => {
+                const row = document.createElement('tr');
+                
+                // 设置行的类，根据预测结果上色
+                row.className = item.prediction === '垃圾短信' ? 'table-danger' : 'table-success';
+                
+                // 设置行的数据ID用于详情查看
+                row.dataset.id = item.id;
+                
+                // 设置行内容
+                row.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td>${item.text.substring(0, 30)}${item.text.length > 30 ? '...' : ''}</td>
+                    <td>${item.send_freq}</td>
+                    <td>${item.is_night}</td>
+                    <td>${item.prediction}</td>
+                    <td>${item.confidence ? (item.confidence * 100).toFixed(1) + '%' : 'N/A'}</td>
+                    <td>${item.model_type}</td>
+                    <td>${item.timestamp}</td>
+                `;
+                
+                tableBody.appendChild(row);
+            });
+            
+            // 创建图表
+            updateCharts();
+        }
+        
+    } catch (error) {
+        console.error('加载历史记录错误:', error);
+        
+        // 显示错误消息
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="8" class="text-center text-danger">
+                    加载失败: ${error.message}
+                </td>
+            </tr>
+        `;
+        
+    } finally {
+        // 隐藏加载动画
+        loadingSpinner.classList.add('d-none');
+    }
+}
+</script>
+{% endblock %}

@@ -312,7 +312,8 @@ async function loadSavedModels() {
                             },
                             body: JSON.stringify({
                                 model_path: modelPath,
-                                model_type: modelType
+                                model_type: modelType,
+                                redirect_home: true
                             })
                         });
                         
@@ -331,9 +332,10 @@ async function loadSavedModels() {
                         // 刷新列表以更新当前加载状态
                         await loadSavedModels();
                         
-                        // 提示用户去首页测试模型
-                        if (confirm('模型已成功加载。是否跳转到首页进行测试？')) {
-                            window.location.href = `/?model_type=${modelType}`;
+                        // 检查响应中是否有重定向属性
+                        if (data.redirect) {
+                            // 自动重定向到指定的URL
+                            window.location.href = data.redirect;
                         }
                         
                     } catch (error) {

@@ -42,16 +42,16 @@
                     <div class="mb-3">
                         <label for="model_type" class="form-label">选择模型</label>
                         <select class="form-select" id="model-select" name="model_type">
-                            <option value="ensemble">Attention Ensemble (注意力集成学习)</option>
-                            <option value="roberta">RoBERTa (Transformer类)</option>
-                            <option value="bert">BERT (Transformer类)</option>
-                            <option value="lstm">LSTM (循环神经网络)</option>
-                            <option value="cnn">CNN (卷积神经网络)</option>
-                            <option value="xlnet">XLNet (Transformer类)</option>
-                            <option value="gpt">GPT (Transformer类)</option>
-                            <option value="attention_lstm">Attention LSTM (带注意力机制)</option>
-                            <option value="svm">SVM (传统机器学习)</option>
-                            <option value="naive_bayes">朴素贝叶斯 (传统机器学习)</option>
+                            <option value="ensemble" {% if selected_model == 'ensemble' %}selected{% endif %}>Attention Ensemble (注意力集成学习)</option>
+                            <option value="roberta" {% if selected_model == 'roberta' %}selected{% endif %}>RoBERTa (Transformer类)</option>
+                            <option value="bert" {% if selected_model == 'bert' %}selected{% endif %}>BERT (Transformer类)</option>
+                            <option value="lstm" {% if selected_model == 'lstm' %}selected{% endif %}>LSTM (循环神经网络)</option>
+                            <option value="cnn" {% if selected_model == 'cnn' %}selected{% endif %}>CNN (卷积神经网络)</option>
+                            <option value="xlnet" {% if selected_model == 'xlnet' %}selected{% endif %}>XLNet (Transformer类)</option>
+                            <option value="gpt" {% if selected_model == 'gpt' %}selected{% endif %}>GPT (Transformer类)</option>
+                            <option value="attention_lstm" {% if selected_model == 'attention_lstm' %}selected{% endif %}>Attention LSTM (带注意力机制)</option>
+                            <option value="svm" {% if selected_model == 'svm' %}selected{% endif %}>SVM (传统机器学习)</option>
+                            <option value="naive_bayes" {% if selected_model == 'naive_bayes' %}selected{% endif %}>朴素贝叶斯 (传统机器学习)</option>
                         </select>
                         <div class="form-text">选择用于识别的机器学习模型</div>
                     </div>
@@ -138,16 +138,16 @@
                     <div class="mb-3">
                         <label for="upload_model_type" class="form-label">选择模型</label>
                         <select class="form-select" id="upload-model-select" name="model_type">
-                            <option value="ensemble">Attention Ensemble (注意力集成学习)</option>
-                            <option value="roberta">RoBERTa (Transformer类)</option>
-                            <option value="bert">BERT (Transformer类)</option>
-                            <option value="lstm">LSTM (循环神经网络)</option>
-                            <option value="cnn">CNN (卷积神经网络)</option>
-                            <option value="xlnet">XLNet (Transformer类)</option>
-                            <option value="gpt">GPT (Transformer类)</option>
-                            <option value="attention_lstm">Attention LSTM (带注意力机制)</option>
-                            <option value="svm">SVM (传统机器学习)</option>
-                            <option value="naive_bayes">朴素贝叶斯 (传统机器学习)</option>
+                            <option value="ensemble" {% if selected_model == 'ensemble' %}selected{% endif %}>Attention Ensemble (注意力集成学习)</option>
+                            <option value="roberta" {% if selected_model == 'roberta' %}selected{% endif %}>RoBERTa (Transformer类)</option>
+                            <option value="bert" {% if selected_model == 'bert' %}selected{% endif %}>BERT (Transformer类)</option>
+                            <option value="lstm" {% if selected_model == 'lstm' %}selected{% endif %}>LSTM (循环神经网络)</option>
+                            <option value="cnn" {% if selected_model == 'cnn' %}selected{% endif %}>CNN (卷积神经网络)</option>
+                            <option value="xlnet" {% if selected_model == 'xlnet' %}selected{% endif %}>XLNet (Transformer类)</option>
+                            <option value="gpt" {% if selected_model == 'gpt' %}selected{% endif %}>GPT (Transformer类)</option>
+                            <option value="attention_lstm" {% if selected_model == 'attention_lstm' %}selected{% endif %}>Attention LSTM (带注意力机制)</option>
+                            <option value="svm" {% if selected_model == 'svm' %}selected{% endif %}>SVM (传统机器学习)</option>
+                            <option value="naive_bayes" {% if selected_model == 'naive_bayes' %}selected{% endif %}>朴素贝叶斯 (传统机器学习)</option>
                         </select>
                     </div>
                     

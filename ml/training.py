@@ -310,6 +310,14 @@ def train_model(model, features, labels, model_type, model_save_path, epochs=10,
                 for batch_features, batch_labels in train_loader:
                     # 前向传播
                     outputs = model(batch_features)
+                    
+                    # 确保输出和标签的维度匹配
+                    outputs = outputs.squeeze()  # 从 [batch_size, 1] 变为 [batch_size]
+                    if len(outputs.shape) == 0 and len(batch_labels.shape) == 0:
+                        # 处理单个样本的特殊情况
+                        outputs = outputs.unsqueeze(0)
+                        batch_labels = batch_labels.unsqueeze(0)
+                    
                     loss = criterion(outputs, batch_labels)
                     
                     # 反向传播
@@ -330,6 +338,13 @@ def train_model(model, features, labels, model_type, model_save_path, epochs=10,
                     
                     for batch_features, batch_labels in test_loader:
                         outputs = model(batch_features)
+                        # 确保输出和标签的维度匹配
+                        outputs = outputs.squeeze()  # 从 [batch_size, 1] 变为 [batch_size]
+                        if len(outputs.shape) == 0 and len(batch_labels.shape) == 0:
+                            # 处理单个样本的特殊情况
+                            outputs = outputs.unsqueeze(0)
+                            batch_labels = batch_labels.unsqueeze(0)
+                        
                         preds = torch.sigmoid(outputs) > 0.5
                         y_pred.extend(preds.cpu().numpy())
                         y_true.extend(batch_labels.cpu().numpy())
@@ -429,6 +444,14 @@ def cross_validate(model_class, features, labels, model_type, n_folds=5, epochs=
                 
                 for batch_features, batch_labels in train_loader:
                     outputs = model(batch_features)
+                    
+                    # 确保输出和标签的维度匹配
+                    outputs = outputs.squeeze()  # 从 [batch_size, 1] 变为 [batch_size]
+                    if len(outputs.shape) == 0 and len(batch_labels.shape) == 0:
+                        # 处理单个样本的特殊情况
+                        outputs = outputs.unsqueeze(0)
+                        batch_labels = batch_labels.unsqueeze(0)
+                    
                     loss = criterion(outputs, batch_labels)
                     
                     optimizer.zero_grad()
@@ -448,6 +471,13 @@ def cross_validate(model_class, features, labels, model_type, n_folds=5, epochs=
                 
                 for batch_features, batch_labels in test_loader:
                     outputs = model(batch_features)
+                    # 确保输出和标签的维度匹配
+                    outputs = outputs.squeeze()  # 从 [batch_size, 1] 变为 [batch_size]
+                    if len(outputs.shape) == 0 and len(batch_labels.shape) == 0:
+                        # 处理单个样本的特殊情况
+                        outputs = outputs.unsqueeze(0)
+                        batch_labels = batch_labels.unsqueeze(0)
+                    
                     preds = torch.sigmoid(outputs) > 0.5
                     y_pred.extend(preds.cpu().numpy())
                     y_true.extend(batch_labels.cpu().numpy())

@@ -163,6 +163,7 @@ function setupModelTraining() {
             // 禁用按钮，显示加载状态
             const useModelBtn = document.getElementById('use-model-btn');
             const continueBtn = document.getElementById('continue-training-btn');
+            
             useModelBtn.disabled = true;
             useModelBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>加载模型中...';
             continueBtn.disabled = true;
@@ -195,17 +196,23 @@ function setupModelTraining() {
                         saveCurrentPageState('index');
                     }
                     
-                    // 延迟跳转以确保toast可见
-                    setTimeout(() => {
+                    // 不自动跳转，而是允许用户主动点击按钮
+                    showToast('success', '模型已加载', `${getModelName(data.model_type)}模型已成功加载且可以使用`);
+                    
+                    // 更新按钮样式和文字
+                    useModelBtn.disabled = false;
+                    useModelBtn.innerHTML = '<i class="fas fa-home me-1"></i> 返回主页使用此模型';
+                    continueBtn.disabled = false;
+                    
+                    // 修改按钮行为为手动导航
+                    useModelBtn.onclick = function() {
                         try {
-                            // 直接使用window.location.replace以避免页面堆栈问题
-                            window.location.replace(`/?model_type=${data.model_type}&from=training`);
+                            window.location.href = `/?model_type=${data.model_type}&from=training`;
                         } catch (error) {
                             console.error('页面跳转错误:', error);
-                            // 回退到标准方法
                             window.location.href = '/';
                         }
-                    }, 500);
+                    };
                 } else {
                     // 恢复按钮状态
                     useModelBtn.disabled = false;

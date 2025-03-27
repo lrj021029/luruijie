@@ -158,9 +158,26 @@
 
 {% block scripts %}
 <script>
+    // 全局变量和工具函数
+    let loadingDatasets = false;
+    let lastDatasetLoad = 0;
+    
     // 页面加载时获取数据集列表
     document.addEventListener('DOMContentLoaded', function() {
-        loadDatasets();
+        // 初始化全局AppState对象（如果不存在）
+        if (!window.AppState && typeof AppState === 'function') {
+            window.AppState = new AppState();
+            window.AppState.init();
+            console.log('在数据集页面初始化AppState');
+        }
+        
+        loadDatasets()
+            .then(() => {
+                console.log('数据集加载完成');
+            })
+            .catch(error => {
+                console.error('数据集加载失败:', error);
+            });
         
         // 设置表单提交事件
         const datasetUploadForm = document.getElementById('dataset-upload-form');
@@ -172,7 +189,11 @@
         const refreshDatasetsBtn = document.getElementById('refresh-datasets-btn');
         if (refreshDatasetsBtn) {
             refreshDatasetsBtn.addEventListener('click', function() {
-                loadDatasets(true);
+                loadDatasets(true)
+                    .then(() => {
+                        showToast('success', '刷新成功', '数据集列表已更新');
+                    })
+                    .catch(() => {});
             });
         }
         

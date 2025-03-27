@@ -35,7 +35,7 @@ app.secret_key = os.environ.get("SESSION_SECRET", "sms_spam_filter_secret")
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///sms_spam.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["UPLOAD_FOLDER"] = "uploads"
-app.config["DATASETS_FOLDER"] = "datasets"
+app.config["DATASETS_FOLDER"] = "uploads"
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB限制
 
 # 确保上传目录存在
@@ -44,6 +44,90 @@ os.makedirs(app.config["DATASETS_FOLDER"], exist_ok=True)
 
 # 初始化应用与数据库
 db.init_app(app)
+
+# 初始化数据集目录
+def init_datasets():
+    """初始化数据集，导入已存在的CSV文件"""
+    from models import Dataset
+    
+    # 检查数据库中是否已有数据集
+    with app.app_context():
+        if Dataset.query.count() > 0:
+            logging.info("数据库中已存在数据集记录，跳过初始化")
+            return
+            
+        # 查找uploads目录中的所有CSV文件
+        datasets_dir = app.config["DATASETS_FOLDER"]
+        for filename in os.listdir(datasets_dir):
+            if filename.endswith('.csv'):
+                filepath = os.path.join(datasets_dir, filename)
+                
+                try:
+                    # 获取文件信息
+                    file_stats = os.stat(filepath)
+                    file_size = file_stats.st_size
+                    file_date = datetime.fromtimestamp(file_stats.st_mtime)
+                    
+                    # 尝试读取CSV文件来获取数据统计
+                    encodings = ['utf-8', 'latin1', 'gbk', 'gb2312', 'cp1252']
+                    df = None
+                    
+                    for encoding in encodings:
+                        try:
+                            df = pd.read_csv(filepath, encoding=encoding)
+                            break
+                        except Exception:
+                            continue
+                    
+                    if df is None:
+                        logging.warning(f"无法读取文件 {filename}，跳过")
+                        continue
+                    
+                    # 统计数据
+                    total_records = len(df)
+                    spam_count = 0
+                    ham_count = 0
+                    
+                    # 尝试查找标签列
+                    possible_label_columns = ['label', 'class', 'category', 'spam', 'is_spam', '标签', '分类', '垃圾']
+                    label_column = None
+                    
+                    for col in possible_label_columns:
+                        if col in df.columns:
+                            label_column = col
+                            break
+                    
+                    # 如果找到标签列，统计垃圾短信和正常短信数量
+                    if label_column:
+                        for label in df[label_column]:
+                            label_str = str(label).lower().strip()
+                            if label_str in ['spam', '1', 'true', 'yes', '垃圾', '垃圾短信']:
+                                spam_count += 1
+                            elif label_str in ['ham', '0', 'false', 'no', '正常', '正常短信']:
+                                ham_count += 1
+                    
+                    # 创建数据集记录
+                    dataset = Dataset(
+                        name=f"导入的数据集: {filename}",
+                        filename=filename,
+                        file_path=filepath,
+                        description=f"自动导入的数据集，文件大小: {file_size//1024} KB",
+                        total_records=total_records,
+                        spam_count=spam_count,
+                        ham_count=ham_count,
+                        upload_time=file_date
+                    )
+                    
+                    db.session.add(dataset)
+                    logging.info(f"导入数据集: {filename}, 记录数: {total_records}")
+                
+                except Exception as e:
+                    logging.error(f"导入数据集 {filename} 失败: {str(e)}")
+                    logging.error(traceback.format_exc())
+        
+        # 提交所有更改
+        db.session.commit()
+        logging.info("数据集初始化完成")
 
 # 导入模型
 from models import SMSMessage, Dataset
@@ -1208,9 +1292,14 @@ with app.app_context():
     # 加载模型
     load_models()
 
+# 在启动前初始化数据库和数据集
+with app.app_context():
+    db.create_all()
+    # 初始化数据集
+    init_datasets()
+    # 加载模型
+    load_models()
+
 if __name__ == '__main__':
-    # 在启动前确保表已创建
-    with app.app_context():
-        db.create_all()
     # 启动应用
     app.run(host="0.0.0.0", port=5000, debug=True)

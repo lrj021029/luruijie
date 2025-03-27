@@ -1,5 +1,6 @@
 {pkgs}: {
   deps = [
+    pkgs.sqlite
     pkgs.glibcLocales
     pkgs.tk
     pkgs.tcl

@@ -1,41 +1,7 @@
 /**
  * 软路由实现 - 在不同页面之间切换时保持状态
+ * 使用app_state.js提供的全局状态管理系统
  */
-
-// 存储当前页面数据和状态
-let currentPageData = {
-    // 首页数据
-    index: {
-        predictionText: null,     // 预测文本内容
-        sendFreq: 0,              // 发送频率
-        isNight: 0,               // 是否夜间发送
-        modelType: null,          // 选择的模型类型
-        predictionResult: null,   // 预测结果
-        trainingResult: {         // 训练结果
-            visible: false,       
-            content: ''
-        }
-    },
-    // 特征页面数据
-    features: {
-        loaded: false,            // 是否已加载特征数据
-        spamWordCloud: null,      // 垃圾短信词云数据缓存
-        hamWordCloud: null,       // 正常短信词云数据缓存
-        modelMetrics: null,       // 模型性能指标数据缓存
-        scrollPosition: 0         // 页面滚动位置
-    },
-    // 历史页面数据
-    history: {
-        loaded: false,            // 是否已加载历史数据
-        filter: '',               // 筛选条件
-        records: null,            // 历史记录数据缓存
-        selectedIds: [],          // 选中的记录ID
-        sortColumn: 'timestamp',  // 排序列
-        sortDirection: 'desc',    // 排序方向
-        currentPage: 1,           // 当前页码
-        scrollPosition: 0         // 页面滚动位置
-    }
-};
 
 // 初始化软路由
 document.addEventListener("DOMContentLoaded", function() {
@@ -132,7 +98,14 @@ function setupNavLinkInterception() {
 // 保存当前页面状态
 function saveCurrentPageState(pageType) {
     try {
-        // 根据页面类型保存不同的数据
+        // 确保AppState已初始化
+        if (!window.AppState) {
+            console.warn('AppState未初始化，无法保存状态');
+            return;
+        }
+        
+        // A. 使用AppState存储数据
+        // 根据页面类型收集和保存不同的数据
         switch (pageType) {
             case 'index':
                 // 保存首页数据
@@ -144,90 +117,98 @@ function saveCurrentPageState(pageType) {
                 const modelTrainingResult = document.querySelector('.train-result');
                 const trainingContent = document.getElementById('train-result-content');
                 
-                if (textInput) currentPageData.index.predictionText = textInput.value;
-                if (sendFreqInput) currentPageData.index.sendFreq = sendFreqInput.value;
-                if (isNightInput) currentPageData.index.isNight = isNightInput.checked ? 1 : 0;
-                if (modelSelect) {
-                    currentPageData.index.modelType = modelSelect.value;
-                    // 同时保存模型选择到全局选择
-                    localStorage.setItem('selected_model_type', modelSelect.value);
-                }
+                // 批量更新首页状态
+                const indexUpdates = {};
+                
+                if (textInput) indexUpdates.predictionText = textInput.value;
+                if (sendFreqInput) indexUpdates.sendFreq = sendFreqInput.value;
+                if (isNightInput) indexUpdates.isNight = isNightInput.checked ? 1 : 0;
+                if (modelSelect) indexUpdates.modelType = modelSelect.value;
+                
                 if (predictionResult && !predictionResult.classList.contains('d-none')) {
-                    currentPageData.index.predictionResult = predictionResult.innerHTML;
+                    indexUpdates.predictionResult = predictionResult.innerHTML;
                 }
                 
                 // 保存模型训练结果
                 if (modelTrainingResult && !modelTrainingResult.classList.contains('d-none') && trainingContent) {
-                    currentPageData.index.trainingResult = {
+                    indexUpdates.trainingResult = {
                         visible: true,
                         content: trainingContent.innerHTML
                     };
                 } else {
-                    currentPageData.index.trainingResult = {
+                    indexUpdates.trainingResult = {
                         visible: false,
                         content: ''
                     };
                 }
+                
+                // 批量更新状态
+                window.AppState.updatePageState('index', indexUpdates);
                 break;
                 
             case 'features':
                 // 特征页面数据
-                currentPageData.features.loaded = true;
-                
-                // 保存滚动位置
-                currentPageData.features.scrollPosition = window.scrollY;
+                const featuresUpdates = {
+                    loaded: true,
+                    scrollPosition: window.scrollY
+                };
                 
                 // 尝试缓存词云数据
                 if (window.cachedSpamWordCloud) {
-                    currentPageData.features.spamWordCloud = window.cachedSpamWordCloud;
+                    featuresUpdates.spamWordCloud = window.cachedSpamWordCloud;
                 }
                 if (window.cachedHamWordCloud) {
-                    currentPageData.features.hamWordCloud = window.cachedHamWordCloud;
+                    featuresUpdates.hamWordCloud = window.cachedHamWordCloud;
                 }
                 
                 // 尝试缓存模型性能指标
                 if (window.cachedModelMetrics) {
-                    currentPageData.features.modelMetrics = window.cachedModelMetrics;
+                    featuresUpdates.modelMetrics = window.cachedModelMetrics;
                 }
+                
+                window.AppState.updatePageState('features', featuresUpdates);
                 break;
                 
             case 'history':
                 // 历史页面数据
-                const filterInput = document.getElementById('history-filter');
-                if (filterInput) currentPageData.history.filter = filterInput.value;
-                currentPageData.history.loaded = true;
+                const historyUpdates = {
+                    loaded: true,
+                    scrollPosition: window.scrollY
+                };
                 
-                // 保存滚动位置
-                currentPageData.history.scrollPosition = window.scrollY;
+                const filterInput = document.getElementById('history-filter');
+                if (filterInput) historyUpdates.filter = filterInput.value;
                 
                 // 保存选中的记录ID
                 const checkboxes = document.querySelectorAll('.history-select-checkbox:checked');
                 if (checkboxes.length > 0) {
-                    currentPageData.history.selectedIds = Array.from(checkboxes)
+                    historyUpdates.selectedIds = Array.from(checkboxes)
                         .map(cb => parseInt(cb.value));
                 }
                 
                 // 保存记录数据
                 if (window.cachedHistoryData) {
-                    currentPageData.history.records = window.cachedHistoryData;
+                    historyUpdates.records = window.cachedHistoryData;
                 }
                 
                 // 保存排序状态
                 if (window.currentSortColumn) {
-                    currentPageData.history.sortColumn = window.currentSortColumn;
-                    currentPageData.history.sortDirection = window.currentSortDirection || 'desc';
+                    historyUpdates.sortColumn = window.currentSortColumn;
+                    historyUpdates.sortDirection = window.currentSortDirection || 'desc';
                 }
                 
                 // 保存分页信息
                 if (window.currentPage) {
-                    currentPageData.history.currentPage = window.currentPage;
+                    historyUpdates.currentPage = window.currentPage;
                 }
+                
+                window.AppState.updatePageState('history', historyUpdates);
                 break;
         }
         
-        // 保存到localStorage
-        localStorage.setItem('pageState', JSON.stringify(currentPageData));
-        console.log(`已保存${pageType}页面状态到localStorage`);
+        // 显式保存到存储中以确保持久性
+        window.AppState.saveToStorage();
+        console.log(`已保存${pageType}页面状态`);
     } catch (error) {
         console.error('保存页面状态错误:', error);
     }
@@ -236,12 +217,17 @@ function saveCurrentPageState(pageType) {
 // 恢复页面状态
 function restorePageState(pageType) {
     try {
-        // 从localStorage获取保存的状态
-        const savedState = localStorage.getItem('pageState');
-        if (!savedState) return;
+        // 确保AppState已初始化
+        if (!window.AppState) {
+            console.warn('AppState未初始化，无法恢复状态');
+            return;
+        }
         
-        // 解析保存的状态
-        const savedData = JSON.parse(savedState);
+        // 从AppState获取页面状态
+        const pageState = window.AppState.getPageState(pageType);
+        if (!pageState) return;
+        
+        // 使用AppState中的数据
         
         // 根据页面类型恢复不同的数据
         switch (pageType) {
@@ -277,38 +263,38 @@ function restorePageState(pageType) {
                                 }, 200);
                             });
                         }
-                    } else if (modelSelect && savedData.index.modelType) {
+                    } else if (modelSelect && pageState.modelType) {
                         // 恢复保存的模型选择
-                        if (Array.from(modelSelect.options).some(opt => opt.value === savedData.index.modelType)) {
-                            modelSelect.value = savedData.index.modelType;
-                            console.log('已恢复模型选择:', savedData.index.modelType);
+                        if (Array.from(modelSelect.options).some(opt => opt.value === pageState.modelType)) {
+                            modelSelect.value = pageState.modelType;
+                            console.log('已恢复模型选择:', pageState.modelType);
                         }
                     }
                 }, 300);
                 
                 // 恢复其他表单字段
-                if (textInput && savedData.index.predictionText) {
-                    textInput.value = savedData.index.predictionText;
+                if (textInput && pageState.predictionText) {
+                    textInput.value = pageState.predictionText;
                 }
                 
-                if (sendFreqInput && savedData.index.sendFreq !== null) {
-                    sendFreqInput.value = savedData.index.sendFreq;
+                if (sendFreqInput && pageState.sendFreq !== null) {
+                    sendFreqInput.value = pageState.sendFreq;
                 }
                 
-                if (isNightInput && savedData.index.isNight !== null) {
-                    isNightInput.checked = savedData.index.isNight === 1;
+                if (isNightInput && pageState.isNight !== null) {
+                    isNightInput.checked = pageState.isNight === 1;
                 }
                 
                 // 恢复预测结果
-                if (predictionResult && savedData.index.predictionResult) {
-                    predictionResult.innerHTML = savedData.index.predictionResult;
+                if (predictionResult && pageState.predictionResult) {
+                    predictionResult.innerHTML = pageState.predictionResult;
                     predictionResult.classList.remove('d-none');
                 }
                 
                 // 恢复训练结果
-                if (trainResultDiv && trainResultContent && savedData.index.trainingResult) {
-                    if (savedData.index.trainingResult.visible && savedData.index.trainingResult.content) {
-                        trainResultContent.innerHTML = savedData.index.trainingResult.content;
+                if (trainResultDiv && trainResultContent && pageState.trainingResult) {
+                    if (pageState.trainingResult.visible && pageState.trainingResult.content) {
+                        trainResultContent.innerHTML = pageState.trainingResult.content;
                         trainResultDiv.classList.remove('d-none');
                         
                         // 重新添加按钮事件
@@ -339,16 +325,16 @@ function restorePageState(pageType) {
                 
             case 'features':
                 // 特征页面
-                if (savedData.features && savedData.features.loaded) {
+                if (pageState.loaded) {
                     // 恢复缓存的数据
-                    if (savedData.features.spamWordCloud) {
-                        window.cachedSpamWordCloud = savedData.features.spamWordCloud;
+                    if (pageState.spamWordCloud) {
+                        window.cachedSpamWordCloud = pageState.spamWordCloud;
                     }
-                    if (savedData.features.hamWordCloud) {
-                        window.cachedHamWordCloud = savedData.features.hamWordCloud;
+                    if (pageState.hamWordCloud) {
+                        window.cachedHamWordCloud = pageState.hamWordCloud;
                     }
-                    if (savedData.features.modelMetrics) {
-                        window.cachedModelMetrics = savedData.features.modelMetrics;
+                    if (pageState.modelMetrics) {
+                        window.cachedModelMetrics = pageState.modelMetrics;
                     }
                     
                     // 判断是否需要重新加载，如果已有缓存数据则尝试直接使用
@@ -393,9 +379,9 @@ function restorePageState(pageType) {
                         }
                         
                         // 恢复滚动位置
-                        if (savedData.features.scrollPosition) {
+                        if (pageState.scrollPosition) {
                             setTimeout(() => {
-                                window.scrollTo(0, savedData.features.scrollPosition);
+                                window.scrollTo(0, pageState.scrollPosition);
                             }, 300);
                         }
                     }, 500);
@@ -404,27 +390,27 @@ function restorePageState(pageType) {
                 
             case 'history':
                 // 历史页面
-                if (savedData.history && savedData.history.loaded) {
+                if (pageState.loaded) {
                     // 恢复过滤器值
                     const filterInput = document.getElementById('history-filter');
-                    if (filterInput && savedData.history.filter) {
-                        filterInput.value = savedData.history.filter;
+                    if (filterInput && pageState.filter) {
+                        filterInput.value = pageState.filter;
                     }
                     
                     // 恢复缓存的记录数据
-                    if (savedData.history.records) {
-                        window.cachedHistoryData = savedData.history.records;
+                    if (pageState.records) {
+                        window.cachedHistoryData = pageState.records;
                     }
                     
                     // 恢复排序设置
-                    if (savedData.history.sortColumn) {
-                        window.currentSortColumn = savedData.history.sortColumn;
-                        window.currentSortDirection = savedData.history.sortDirection;
+                    if (pageState.sortColumn) {
+                        window.currentSortColumn = pageState.sortColumn;
+                        window.currentSortDirection = pageState.sortDirection;
                     }
                     
                     // 恢复分页设置
-                    if (savedData.history.currentPage) {
-                        window.currentPage = savedData.history.currentPage;
+                    if (pageState.currentPage) {
+                        window.currentPage = pageState.currentPage;
                     }
                     
                     // 恢复历史记录
@@ -436,9 +422,9 @@ function restorePageState(pageType) {
                                 displayHistoryData(window.cachedHistoryData);
                                 
                                 // 恢复选中状态
-                                if (savedData.history.selectedIds && savedData.history.selectedIds.length > 0) {
+                                if (pageState.selectedIds && pageState.selectedIds.length > 0) {
                                     setTimeout(() => {
-                                        savedData.history.selectedIds.forEach(id => {
+                                        pageState.selectedIds.forEach(id => {
                                             const checkbox = document.querySelector(`.history-select-checkbox[value="${id}"]`);
                                             if (checkbox) {
                                                 checkbox.checked = true;
@@ -462,9 +448,9 @@ function restorePageState(pageType) {
                             }
                             
                             // 恢复滚动位置
-                            if (savedData.history.scrollPosition) {
+                            if (pageState.scrollPosition) {
                                 setTimeout(() => {
-                                    window.scrollTo(0, savedData.history.scrollPosition);
+                                    window.scrollTo(0, pageState.scrollPosition);
                                 }, 300);
                             }
                         }

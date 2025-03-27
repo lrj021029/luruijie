@@ -1,6 +1,15 @@
 // main.js - 主要的JavaScript功能
 
 document.addEventListener("DOMContentLoaded", function() {
+    // 初始化全局状态管理
+    if (typeof AppState !== 'undefined') {
+        window.AppState = new AppState();
+        window.AppState.init();
+        console.log('全局状态管理已初始化');
+    } else {
+        console.warn('AppState未定义，无法初始化状态管理');
+    }
+    
     // 初始化事件监听器
     initEventListeners();
     

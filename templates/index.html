@@ -216,7 +216,7 @@
                     </div>
                     
                     <div class="d-grid">
-                        <button type="submit" class="btn btn-success">
+                        <button type="submit" class="btn btn-success" id="train-button">
                             <i class="fas fa-play-circle me-2"></i>开始训练模型
                         </button>
                     </div>
@@ -232,8 +232,16 @@
                     <div id="training-status" class="small text-muted">准备训练...</div>
                 </div>
                 
+                <!-- 训练结果 -->
+                <div class="train-result mt-4 d-none">
+                    <div class="alert alert-success">
+                        <h6 class="alert-heading"><i class="fas fa-check-circle me-2"></i>训练成功!</h6>
+                        <div id="train-result-content"></div>
+                    </div>
+                </div>
+                
                 <!-- 已保存模型列表 -->
-                <div class="mt-4">
+                <div class="mt-4" id="saved-models-container">
                     <h6 class="border-bottom pb-2">已训练模型</h6>
                     
                     <!-- 加载中动画 -->
@@ -251,8 +259,10 @@
                     </div>
                     
                     <!-- 已保存模型列表 -->
-                    <div id="saved-models-list" class="accordion d-none">
-                        <!-- 模型列表将通过JS动态填充 -->
+                    <div id="saved-models-list" class="d-none">
+                        <div id="savedModelsAccordion" class="accordion">
+                            <!-- 模型列表将通过JS动态填充 -->
+                        </div>
                     </div>
                 </div>
             </div>
@@ -355,4 +365,37 @@
     </div>
   {% endif %}
 {% endwith %}
+
+<!-- 列选择模态框 -->
+<div class="modal fade" id="columnsModal" tabindex="-1" aria-labelledby="columnsModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="columnsModalLabel">选择列</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="columns-form">
+          <div class="mb-3">
+            <label for="text-column-select" class="form-label">选择文本列</label>
+            <select class="form-select" id="text-column-select" required>
+              <!-- 动态填充选项 -->
+            </select>
+            <div class="form-text">包含短信内容的列</div>
+          </div>
+          <div class="mb-3">
+            <label for="label-column-select" class="form-label">选择标签列</label>
+            <select class="form-select" id="label-column-select" required>
+              <!-- 动态填充选项 -->
+            </select>
+            <div class="form-text">包含标签的列 (0/1 或 ham/spam)</div>
+          </div>
+          <div class="d-grid">
+            <button type="submit" class="btn btn-primary">确认并继续训练</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}

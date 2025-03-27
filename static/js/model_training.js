@@ -45,7 +45,7 @@ function setupModelTraining() {
             // 如果需要用户选择列
             if (!response.ok && data.preview_needed) {
                 // 显示列选择对话框
-                const columnsModal = new bootstrap.Modal(document.getElementById('columnsModal') || createColumnsModal());
+                const columnsModal = new bootstrap.Modal(document.getElementById('columnsModal'));
                 
                 // 填充列选择下拉框
                 const textColumnSelect = document.getElementById('text-column-select');
@@ -174,8 +174,11 @@ function setupModelTraining() {
             .then(response => response.json())
             .then(result => {
                 if (result.success) {
-                    // 保存模型选择到localStorage
-                    localStorage.setItem('selected_model_type', data.model_type);
+                    // 保存模型选择到全局状态
+                    if (window.AppState) {
+                        window.AppState.set('index.modelType', data.model_type);
+                        window.AppState.saveToStorage();
+                    }
                     
                     // 显示加载成功提示
                     showToast('success', '模型已加载', `${getModelName(data.model_type)}模型已成功加载并可以使用`);
@@ -364,8 +367,11 @@ async function loadSavedModels() {
                         // 显示成功消息
                         showToast('success', '加载成功', `${getModelName(modelType)}模型已成功加载`);
                         
-                        // 保存模型选择到localStorage
-                        localStorage.setItem('selected_model_type', modelType);
+                        // 保存模型选择到全局状态
+                        if (window.AppState) {
+                            window.AppState.set('index.modelType', modelType);
+                            window.AppState.saveToStorage();
+                        }
                         
                         // 刷新列表以更新当前加载状态
                         await loadSavedModels();
@@ -487,51 +493,7 @@ function getModelName(modelType) {
 }
 
 // 显示Toast消息（复用main.js中的函数）
-// 创建列选择模态框
-function createColumnsModal() {
-    const modal = document.createElement('div');
-    modal.className = 'modal fade';
-    modal.id = 'columnsModal';
-    modal.setAttribute('tabindex', '-1');
-    modal.setAttribute('aria-labelledby', 'columnsModalLabel');
-    modal.setAttribute('aria-hidden', 'true');
-    
-    modal.innerHTML = `
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="columnsModalLabel">选择数据列</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <p>请选择CSV文件中的文本列和标签列：</p>
-                    <form id="columns-form">
-                        <div class="mb-3">
-                            <label for="text-column-select" class="form-label">文本列</label>
-                            <select class="form-select" id="text-column-select" required>
-                                <!-- 选项将由JavaScript动态生成 -->
-                            </select>
-                            <div class="form-text">包含短信文本内容的列</div>
-                        </div>
-                        <div class="mb-3">
-                            <label for="label-column-select" class="form-label">标签列</label>
-                            <select class="form-select" id="label-column-select" required>
-                                <!-- 选项将由JavaScript动态生成 -->
-                            </select>
-                            <div class="form-text">包含标签（垃圾/正常）的列</div>
-                        </div>
-                        <div class="d-grid">
-                            <button type="submit" class="btn btn-primary">确认并开始训练</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    return modal;
-}
+// 显示Toast信息的通用函数
 
 function showToast(type, title, message) {
     let toastContainer = document.querySelector('.toast-container');

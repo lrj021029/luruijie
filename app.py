@@ -171,10 +171,24 @@ def upload_file():
         
         # 如果是第一次上传且没有指定列映射
         if not mapping_mode and not text_column:
-            # 如果存在text列，直接使用
-            if 'text' in df.columns:
-                text_column = 'text'
-            else:
+            # 尝试自动识别常见列名
+            possible_text_columns = ['text', 'message', 'sms', 'content', '短信', '内容', '文本']
+            possible_label_columns = ['label', 'class', 'category', 'spam', 'is_spam', '标签', '分类', '垃圾']
+            
+            # 自动查找文本列
+            for col in possible_text_columns:
+                if col in df.columns:
+                    text_column = col
+                    break
+            
+            # 自动查找标签列
+            for col in possible_label_columns:
+                if col in df.columns:
+                    label_column = col
+                    break
+            
+            # 如果没有找到文本列
+            if not text_column:
                 # 返回所有列以供用户选择
                 columns = df.columns.tolist()
                 return jsonify({
@@ -217,24 +231,47 @@ def upload_file():
         
         # 批量处理
         results = []
+        spam_count = 0
+        ham_count = 0
+        
         for _, row in df_processed.iterrows():
             text = row['text']
             send_freq = float(row['send_freq'])
             is_night = int(row['is_night'])
             
-            # 预处理
-            cleaned_text = preprocessing.clean_text(text)
+            # 获取真实标签（如果存在）
+            true_label = None
+            real_prediction = None
             
-            # 特征提取
-            features = feature_extraction.extract_features(
-                cleaned_text, 
-                tokenizers.get(model_type), 
-                send_freq, 
-                is_night
-            )
+            if 'label' in df_processed.columns:
+                true_label = str(row['label']).lower().strip()
+                
+                # 根据标签判断是否为垃圾短信
+                if true_label in ['spam', '1', 'true', 'yes', '垃圾', '垃圾短信']:
+                    real_prediction = 1
+                    spam_count += 1
+                elif true_label in ['ham', '0', 'false', 'no', '正常', '正常短信']:
+                    real_prediction = 0
+                    ham_count += 1
             
-            # 预测
-            prediction, confidence = model_module.predict(models.get(model_type), features, model_type)
+            # 如果有真实标签，则使用真实标签，否则使用模型预测
+            if real_prediction is not None:
+                prediction = real_prediction
+                confidence = 1.0  # 使用真实标签时置信度为1.0
+            else:
+                # 预处理
+                cleaned_text = preprocessing.clean_text(text)
+                
+                # 特征提取
+                features = feature_extraction.extract_features(
+                    cleaned_text, 
+                    tokenizers.get(model_type), 
+                    send_freq, 
+                    is_night
+                )
+                
+                # 预测
+                prediction, confidence = model_module.predict(models.get(model_type), features, model_type)
             
             # 保存到数据库
             new_sms = SMSMessage(
@@ -247,11 +284,6 @@ def upload_file():
                 timestamp=datetime.now()
             )
             db.session.add(new_sms)
-            
-            # 获取真实标签（如果存在）
-            true_label = None
-            if 'label' in df_processed.columns:
-                true_label = str(row['label'])
             
             # 添加到结果
             results.append({
@@ -270,6 +302,11 @@ def upload_file():
         return jsonify({
             'success': True, 
             'results': results,
+            'stats': {
+                'total': len(results),
+                'spam': spam_count,
+                'ham': ham_count
+            },
             'mappings': {
                 'text_column': text_column,
                 'label_column': label_column,

@@ -287,6 +287,8 @@ async function loadHistory() {
     const historyTable = document.getElementById('history-table');
     const tableBody = historyTable.querySelector('tbody');
     const loadingSpinner = document.getElementById('history-spinner');
+    const selectAllCheckbox = document.getElementById('select-all-records');
+    const deleteSelectedBtn = document.getElementById('delete-selected');
     
     // 显示加载动画
     loadingSpinner.classList.remove('d-none');
@@ -304,11 +306,15 @@ async function loadHistory() {
         // 清空表格
         tableBody.innerHTML = '';
         
+        // 重置全选框
+        selectAllCheckbox.checked = false;
+        deleteSelectedBtn.disabled = true;
+        
         // 填充表格
         if (data.length === 0) {
             tableBody.innerHTML = `
                 <tr>
-                    <td colspan="7" class="text-center">暂无记录</td>
+                    <td colspan="10" class="text-center">暂无记录</td>
                 </tr>
             `;
         } else {
@@ -318,8 +324,16 @@ async function loadHistory() {
                 // 设置行的类，根据预测结果上色
                 row.className = item.prediction === '垃圾短信' ? 'table-danger' : 'table-success';
                 
+                // 设置行的数据ID用于详情查看
+                row.dataset.id = item.id;
+                
                 // 设置行内容
                 row.innerHTML = `
+                    <td>
+                        <div class="form-check">
+                            <input class="form-check-input record-checkbox" type="checkbox" value="${item.id}" id="record-${item.id}">
+                        </div>
+                    </td>
                     <td>${index + 1}</td>
                     <td>${item.text.substring(0, 30)}${item.text.length > 30 ? '...' : ''}</td>
                     <td>${item.send_freq}</td>
@@ -328,10 +342,45 @@ async function loadHistory() {
                     <td>${(item.confidence * 100).toFixed(1)}%</td>
                     <td>${item.model_type}</td>
                     <td>${item.timestamp}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${item.id}" title="删除此记录">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </td>
                 `;
                 
                 tableBody.appendChild(row);
             });
+            
+            // 添加删除单个记录的事件监听器
+            document.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', async function() {
+                    const recordId = this.getAttribute('data-id');
+                    if (confirm(`确定要删除记录 #${recordId} 吗？`)) {
+                        await deleteRecord(recordId);
+                    }
+                });
+            });
+            
+            // 添加复选框事件监听器
+            document.querySelectorAll('.record-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', updateDeleteSelectedButton);
+            });
+            
+            // 添加全选框事件监听器
+            selectAllCheckbox.addEventListener('change', function() {
+                const checkboxes = document.querySelectorAll('.record-checkbox');
+                checkboxes.forEach(cb => {
+                    cb.checked = this.checked;
+                });
+                updateDeleteSelectedButton();
+            });
+            
+            // 添加删除选中项按钮事件监听器
+            deleteSelectedBtn.addEventListener('click', deleteSelectedRecords);
+            
+            // 添加删除所有记录按钮事件监听器
+            document.getElementById('delete-all-confirm').addEventListener('click', deleteAllRecords);
         }
         
     } catch (error) {
@@ -340,7 +389,7 @@ async function loadHistory() {
         // 显示错误消息
         tableBody.innerHTML = `
             <tr>
-                <td colspan="7" class="text-center text-danger">
+                <td colspan="10" class="text-center text-danger">
                     加载失败: ${error.message}
                 </td>
             </tr>
@@ -350,6 +399,136 @@ async function loadHistory() {
         // 隐藏加载动画
         loadingSpinner.classList.add('d-none');
     }
+}
+
+// 更新删除选中按钮状态
+function updateDeleteSelectedButton() {
+    const checkboxes = document.querySelectorAll('.record-checkbox:checked');
+    const deleteSelectedBtn = document.getElementById('delete-selected');
+    deleteSelectedBtn.disabled = checkboxes.length === 0;
+}
+
+// 删除单个记录
+async function deleteRecord(recordId) {
+    try {
+        const response = await fetch(`/delete_record/${recordId}`, {
+            method: 'DELETE',
+        });
+        
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.message || '删除记录失败');
+        }
+        
+        // 重新加载历史记录
+        await loadHistory();
+        
+        // 显示成功消息
+        showToast('success', '删除成功', '记录已成功删除');
+        
+    } catch (error) {
+        console.error('删除记录错误:', error);
+        showToast('error', '删除失败', error.message);
+    }
+}
+
+// 删除选中的记录
+async function deleteSelectedRecords() {
+    const checkboxes = document.querySelectorAll('.record-checkbox:checked');
+    const ids = Array.from(checkboxes).map(cb => cb.value);
+    
+    if (ids.length === 0) {
+        return;
+    }
+    
+    if (!confirm(`确定要删除选中的 ${ids.length} 条记录吗？`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/delete_records', {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ ids }),
+        });
+        
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.message || '删除记录失败');
+        }
+        
+        // 重新加载历史记录
+        await loadHistory();
+        
+        // 显示成功消息
+        showToast('success', '批量删除成功', `已成功删除 ${ids.length} 条记录`);
+        
+    } catch (error) {
+        console.error('批量删除记录错误:', error);
+        showToast('error', '删除失败', error.message);
+    }
+}
+
+// 删除所有记录
+async function deleteAllRecords() {
+    try {
+        const response = await fetch('/delete_all_records', {
+            method: 'DELETE',
+        });
+        
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.message || '删除记录失败');
+        }
+        
+        // 关闭确认对话框
+        const modal = bootstrap.Modal.getInstance(document.getElementById('confirmDeleteAllModal'));
+        modal.hide();
+        
+        // 重新加载历史记录
+        await loadHistory();
+        
+        // 显示成功消息
+        showToast('success', '清空成功', '已成功删除所有记录');
+        
+    } catch (error) {
+        console.error('删除所有记录错误:', error);
+        showToast('error', '删除失败', error.message);
+    }
+}
+
+// 显示提示消息
+function showToast(type, title, message) {
+    const toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+        // 如果没有toast容器，创建一个
+        const container = document.createElement('div');
+        container.id = 'toast-container';
+        container.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+        document.body.appendChild(container);
+    }
+    
+    const toastId = 'toast-' + Date.now();
+    const toastHtml = `
+        <div id="${toastId}" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header ${type === 'error' ? 'bg-danger text-white' : 'bg-success text-white'}">
+                <strong class="me-auto">${title}</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body">
+                ${message}
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('toast-container').insertAdjacentHTML('beforeend', toastHtml);
+    
+    // 初始化并显示toast
+    const toastElement = document.getElementById(toastId);
+    const toast = new bootstrap.Toast(toastElement, { delay: 5000 });
+    toast.show();
 }
 
 // 筛选历史记录

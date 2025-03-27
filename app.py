@@ -96,7 +96,9 @@ def load_models():
 @app.route('/')
 def index():
     """渲染主页"""
-    return render_template('index.html', model_types=model_types)
+    # 从URL查询参数获取model_type
+    model_type = request.args.get('model_type')
+    return render_template('index.html', model_types=model_types, selected_model=model_type)
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -814,6 +816,56 @@ def get_models():
         logging.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
         
+@app.route('/load_model', methods=['POST'])
+def load_model_endpoint():
+    """加载指定的保存模型"""
+    try:
+        data = request.json
+        model_path = data.get('model_path')
+        model_type = data.get('model_type')
+        redirect_home = data.get('redirect_home', False)  # 新增: 是否重定向到首页
+        
+        if not model_path or not model_type:
+            return jsonify({'error': '缺少必要参数'}), 400
+        
+        if model_type not in model_types:
+            return jsonify({'error': f'无效的模型类型: {model_type}'}), 400
+        
+        # 检查文件是否存在
+        if not os.path.exists(model_path):
+            return jsonify({'error': f'模型文件不存在: {model_path}'}), 404
+        
+        # 加载模型
+        logging.info(f"尝试加载模型: {model_path}")
+        model, tokenizer = model_module.load_model(model_type, model_path=model_path)
+        
+        if model is None:
+            return jsonify({'error': f'加载模型失败: {model_path}'}), 500
+        
+        # 更新全局模型缓存
+        models[model_type] = model
+        if tokenizer is not None:
+            tokenizers[model_type] = tokenizer
+            
+        logging.info(f"模型 {model_type} 已成功加载: {model_path}")
+        
+        # 如果请求重定向到首页，则进行重定向
+        if redirect_home:
+            # 返回重定向响应，将模型类型作为URL参数传递
+            return jsonify({
+                'success': True, 
+                'message': f'模型 {model_type} 已成功加载', 
+                'redirect': f'/?model_type={model_type}'
+            })
+        
+        # 否则返回正常的成功响应
+        return jsonify({'success': True, 'message': f'模型 {model_type} 已成功加载'})
+        
+    except Exception as e:
+        logging.error(f"加载模型错误: {str(e)}")
+        logging.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/delete_model', methods=['POST'])
 def delete_model():
     """删除保存的模型文件"""

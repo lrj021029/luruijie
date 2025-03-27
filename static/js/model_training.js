@@ -144,19 +144,41 @@ function setupModelTraining() {
                 <li>F1值: ${(data.metrics.f1 * 100).toFixed(2)}%</li>
             </ul>
             <p class="mb-0"><small>已保存模型: ${data.model_path}</small></p>
+            
+            <div class="mt-3 btn-group">
+                <button type="button" class="btn btn-primary" id="use-model-btn">
+                    <i class="fas fa-check-circle me-1"></i> 立即使用此模型
+                </button>
+                <button type="button" class="btn btn-secondary" id="continue-training-btn">
+                    <i class="fas fa-sync me-1"></i> 继续训练其他模型
+                </button>
+            </div>
         `;
         
         trainResultContent.innerHTML = metricsHtml;
         trainResultDiv.classList.remove('d-none');
         
+        // 添加使用此模型按钮事件
+        document.getElementById('use-model-btn').addEventListener('click', function() {
+            // 保存模型选择到localStorage
+            localStorage.setItem('selected_model_type', data.model_type);
+            // 跳转到首页并自动选择当前训练的模型
+            window.location.href = `/?model_type=${data.model_type}`;
+        });
+        
+        // 添加继续训练按钮事件
+        document.getElementById('continue-training-btn').addEventListener('click', function() {
+            trainResultDiv.classList.add('d-none');
+            document.getElementById('train-model-form').reset();
+            trainButton.disabled = false;
+            trainButton.innerHTML = '<i class="fas fa-graduation-cap me-2"></i>开始训练模型';
+        });
+        
         // 刷新模型列表
         loadSavedModels();
         
-        // 增加一个短暂的延迟后重新启用按钮
-        setTimeout(() => {
-            trainButton.disabled = false;
-            trainButton.innerHTML = '<i class="fas fa-graduation-cap me-2"></i>开始训练模型';
-        }, 1000);
+        // 显示提示消息
+        showToast('success', '训练成功', '模型已保存并自动加载，可以立即使用或继续训练其他模型');
     }
     
     // 添加刷新模型列表按钮事件
@@ -282,11 +304,37 @@ async function loadSavedModels() {
                     this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
                     
                     try {
-                        // TODO: 实现加载模型的API调用
-                        // 此处需要后端提供一个加载特定模型的API
+                        // 调用加载模型的API
+                        const response = await fetch('/load_model', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                model_path: modelPath,
+                                model_type: modelType
+                            })
+                        });
                         
-                        // 临时显示一个成功消息
-                        showToast('success', '功能开发中', '模型加载功能正在开发中，请等待后续更新');
+                        const data = await response.json();
+                        
+                        if (!response.ok) {
+                            throw new Error(data.error || '加载模型失败');
+                        }
+                        
+                        // 显示成功消息
+                        showToast('success', '加载成功', `${getModelName(modelType)}模型已成功加载`);
+                        
+                        // 保存模型选择到localStorage
+                        localStorage.setItem('selected_model_type', modelType);
+                        
+                        // 刷新列表以更新当前加载状态
+                        await loadSavedModels();
+                        
+                        // 提示用户去首页测试模型
+                        if (confirm('模型已成功加载。是否跳转到首页进行测试？')) {
+                            window.location.href = `/?model_type=${modelType}`;
+                        }
                         
                     } catch (error) {
                         console.error('加载模型错误:', error);

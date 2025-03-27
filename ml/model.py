@@ -474,11 +474,55 @@ def predict(model, features, model_type):
         prediction = 1 if final_spam_score > 0.5 else 0
         confidence = final_spam_score if prediction == 1 else (1.0 - final_spam_score)
         
+        # 增强的垃圾短信检测逻辑 - 识别明显的垃圾短信模式
+        obvious_spam_patterns = [
+            r'\$\d+', # 美元符号后跟数字
+            r'click here', # 点击这里
+            r'www\.[a-zA-Z0-9-]+\.[a-zA-Z]{2,}', # 网址模式
+            r'http[s]?://', # 包含http或https链接
+            r'free.*offer', # 免费优惠
+            r'limited time', # 限时
+            r'earn money', # 赚钱
+            r'password.*verify', # 密码验证
+            r'bank.*account', # 银行账户
+            r'discount.*\d+%', # 折扣百分比
+            r'cash.*prize', # 现金奖励
+            r'loan.*approval', # 贷款批准
+            r'dating.*singles', # 约会相关
+            r'投资.*回报', # 中文投资回报
+            r'中奖.*通知', # 中文中奖通知
+            r'账号.*异常', # 中文账号异常
+            r'账户.*登录', # 中文账户登录
+            r'验证码.*银行', # 中文验证码银行
+            r'免费.*试用', # 中文免费试用
+            r'赠送.*积分', # 中文赠送积分
+        ]
+        
+        # 检查是否匹配明显的垃圾短信模式
+        obvious_spam_matches = 0
+        for pattern in obvious_spam_patterns:
+            if re.search(pattern, text_str.lower()):
+                obvious_spam_matches += 1
+                
+        # 如果匹配了多个明显的垃圾短信模式，提高垃圾短信评分
+        if obvious_spam_matches >= 2:
+            # 至少匹配2个模式，大幅提高垃圾短信评分
+            final_spam_score = max(0.85, final_spam_score)
+            logging.info(f"检测到明显垃圾短信模式: {obvious_spam_matches}个匹配，提升评分到{final_spam_score:.2f}")
+        elif obvious_spam_matches == 1:
+            # 匹配1个模式，适当提高垃圾短信评分
+            final_spam_score = max(0.7, final_spam_score)
+            logging.info(f"检测到可能的垃圾短信模式: {obvious_spam_matches}个匹配，提升评分到{final_spam_score:.2f}")
+        
+        # 基于最终分数确定预测结果
+        prediction = 1 if final_spam_score > 0.5 else 0
+        confidence = final_spam_score if prediction == 1 else (1.0 - final_spam_score)
+        
         # 记录预测详情，帮助调试
         logging.debug(f"短信预测: 文本={text_str[:30]}..., 垃圾关键词={spam_match_count}, " +
-                      f"正常关键词={ham_match_count}, 规则分={rule_spam_score:.2f}, " +
-                      f"模型分={model_spam_score:.2f}, 最终分={final_spam_score:.2f}, " +
-                      f"预测={prediction}, 置信度={confidence:.2f}")
+                      f"正常关键词={ham_match_count}, 明显模式={obvious_spam_matches}, " +
+                      f"规则分={rule_spam_score:.2f}, 模型分={model_spam_score:.2f}, " +
+                      f"最终分={final_spam_score:.2f}, 预测={prediction}, 置信度={confidence:.2f}")
         
         return prediction, confidence
     

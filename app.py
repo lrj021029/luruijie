@@ -860,6 +860,10 @@ def train_model_endpoint():
             # 使用数据集文件路径
             filepath = dataset.file_path
             
+            # 检查文件是否存在
+            if not os.path.exists(filepath):
+                return jsonify({'error': f'数据集文件不存在: {filepath}'}), 404
+            
             # 更新数据集的最后使用时间
             dataset.last_used = datetime.now()
             db.session.commit()

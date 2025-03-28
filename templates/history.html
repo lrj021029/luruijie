@@ -19,9 +19,45 @@
                 <div class="row">
                     <div class="col-md-8">
                         <div class="input-group mb-3">
-                            <span class="input-group-text"><i class="fas fa-filter"></i></span>
+                            <button class="btn btn-outline-secondary filter-button" type="button" data-bs-toggle="collapse" data-bs-target="#filterOptions" aria-expanded="false" aria-controls="filterOptions">
+                                <i class="fas fa-filter"></i>
+                            </button>
                             <input type="text" class="form-control" id="search-input" placeholder="输入关键词搜索短信内容、预测结果或模型类型...">
                             <button class="btn btn-outline-secondary" type="button" onclick="filterHistory()">搜索</button>
+                        </div>
+                        
+                        <!-- 筛选选项 (折叠面板) -->
+                        <div class="collapse mb-3" id="filterOptions">
+                            <div class="card card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6 class="mb-2">按预测结果筛选</h6>
+                                        <div class="btn-group w-100" role="group">
+                                            <button type="button" class="btn btn-sm btn-outline-success" onclick="filterByResult('正常短信')">
+                                                <i class="fas fa-check-circle me-1"></i>正常短信
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="filterByResult('垃圾短信')">
+                                                <i class="fas fa-exclamation-circle me-1"></i>垃圾短信
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6 class="mb-2">按模型类型筛选</h6>
+                                        <div class="d-flex flex-wrap gap-1">
+                                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="filterByModel('naive_bayes')">朴素贝叶斯</button>
+                                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="filterByModel('svm')">SVM</button>
+                                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="filterByModel('lstm')">LSTM</button>
+                                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="filterByModel('attention_lstm')">注意力LSTM</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <hr>
+                                <div class="d-flex justify-content-end">
+                                    <button type="button" class="btn btn-sm btn-secondary" onclick="resetFilter()">
+                                        <i class="fas fa-undo me-1"></i>重置筛选
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="col-md-4">
@@ -320,6 +356,26 @@ function filterByResult(result) {
     updateCharts();
 }
 
+// 按模型类型筛选
+function filterByModel(modelType) {
+    const rows = document.querySelectorAll('#history-table tbody tr');
+    const displayModelName = getModelDisplayName(modelType);
+    
+    rows.forEach(row => {
+        const modelCell = row.cells[7]; // 使用模型列索引
+        const modelText = modelCell.textContent.trim();
+        
+        if (modelText === displayModelName) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+    
+    // 更新图表
+    updateCharts();
+}
+
 // 重置筛选
 function resetFilter() {
     const rows = document.querySelectorAll('#history-table tbody tr');
@@ -396,6 +452,29 @@ function updateCharts() {
     const visibleRows = Array.from(document.querySelectorAll('#history-table tbody tr'))
         .filter(row => row.style.display !== 'none');
     
+    if (visibleRows.length === 0) {
+        // 如果没有可见行，显示空白图表或提示信息
+        if (window.resultsChart) {
+            window.resultsChart.destroy();
+            window.resultsChart = null;
+        }
+        if (window.modelsChart) {
+            window.modelsChart.destroy();
+            window.modelsChart = null;
+        }
+        
+        // 显示无数据提示
+        document.getElementById('results-chart').parentNode.innerHTML = 
+            '<canvas id="results-chart" height="250" style="display:none;"></canvas>' +
+            '<div class="alert alert-info mt-3 mb-0 text-center">无数据可显示</div>';
+            
+        document.getElementById('models-chart').parentNode.innerHTML = 
+            '<canvas id="models-chart" height="250" style="display:none;"></canvas>' +
+            '<div class="alert alert-info mt-3 mb-0 text-center">无数据可显示</div>';
+        
+        return;
+    }
+    
     // 计算预测结果分布
     const spamCount = visibleRows.filter(row => {
         const badgeEl = row.cells[5].querySelector('.badge');
@@ -414,11 +493,14 @@ function updateCharts() {
         modelCounts[model] = (modelCounts[model] || 0) + 1;
     });
     
-    // 更新结果分布图表
-    if (window.resultsChart) {
-        window.resultsChart.destroy();
-    }
+    // 确保元素存在并重置容器
+    let resultsContainer = document.getElementById('results-chart').parentNode;
+    let modelsContainer = document.getElementById('models-chart').parentNode;
     
+    resultsContainer.innerHTML = '<canvas id="results-chart" height="250"></canvas>';
+    modelsContainer.innerHTML = '<canvas id="models-chart" height="250"></canvas>';
+    
+    // 更新结果分布图表
     const resultsCtx = document.getElementById('results-chart').getContext('2d');
     window.resultsChart = new Chart(resultsCtx, {
         type: 'pie',
@@ -450,10 +532,6 @@ function updateCharts() {
     });
     
     // 更新模型使用统计图表
-    if (window.modelsChart) {
-        window.modelsChart.destroy();
-    }
-    
     const modelsCtx = document.getElementById('models-chart').getContext('2d');
     window.modelsChart = new Chart(modelsCtx, {
         type: 'bar',

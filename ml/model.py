@@ -43,7 +43,7 @@ class SMSLSTM(nn.Module):
             batch_first=True,
             bidirectional=True
         )
-        self.fc = nn.Linear(hidden_dim * 2, 1)
+        self.fc = nn.Linear(hidden_dim * 2, 2)  # 输出两个类别的分数
         self.dropout = nn.Dropout(dropout)
     
     def forward(self, x):
@@ -83,7 +83,7 @@ class ResidualAttentionLSTM(nn.Module):
         
         # 全连接层
         self.fc1 = nn.Linear(hidden_dim * 2, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, 1)
+        self.fc2 = nn.Linear(hidden_dim, 2)  # 输出两个类别的分数
         
         # Dropout正则化
         self.dropout = nn.Dropout(dropout)
@@ -146,8 +146,8 @@ class EnsembleAttentionModel(nn.Module):
         # 注意力机制层：为每个模型计算权重
         self.attention_layer = nn.Linear(hidden_dim, 1)
         
-        # 最终的分类层
-        self.classifier = nn.Linear(hidden_dim, 1)
+        # 最终的分类层，输出两个类别的分数 (正常和垃圾)
+        self.classifier = nn.Linear(hidden_dim, 2)
         self.dropout = nn.Dropout(dropout)
         self.hidden_dim = hidden_dim
         
@@ -169,7 +169,7 @@ class EnsembleAttentionModel(nn.Module):
         # 如果没有输入特征，返回全0预测
         if not model_features:
             batch_size = next(iter(features_dict.values())).size(0) if features_dict else 1
-            return torch.zeros(batch_size, 1), {}
+            return torch.zeros(batch_size, 2), {}
         
         # 2. 计算注意力权重
         attention_scores = {}
@@ -196,7 +196,15 @@ class EnsembleAttentionModel(nn.Module):
         
         # 6. 应用dropout并预测
         combined_features = self.dropout(combined_features)
-        prediction = torch.sigmoid(self.classifier(combined_features))
+        logits = self.classifier(combined_features)
+        
+        # 对于二分类问题，输出2个类别的分数
+        if logits.shape[-1] == 2:
+            # 使用softmax获取概率
+            prediction = F.softmax(logits, dim=-1)
+        else:
+            # 兼容旧代码，使用sigmoid获取二元概率
+            prediction = torch.sigmoid(logits)
         
         # 返回预测结果和注意力权重
         return prediction, attention_weights
@@ -264,7 +272,8 @@ def load_model(model_type, model_path=None):
                     import torch
                     if isinstance(X, torch.Tensor):
                         batch_size = X.size(0)
-                        return torch.rand((batch_size, 1))
+                        # 返回两个类别的分数 (正常和垃圾)
+                        return torch.rand((batch_size, 2))
                     return self.predict(X)
                     
                 def state_dict(self):
@@ -608,9 +617,18 @@ def predict(model, features, model_type):
                         # 将特征转换为张量
                         features_tensor = torch.FloatTensor(features).unsqueeze(0)
                         output = model(features_tensor)
-                        # 获取sigmoid输出作为置信度
-                        model_spam_score = torch.sigmoid(output).item()
-                        logging.info(f"深度学习模型预测成功: {model_type}, 分数: {model_spam_score:.4f}")
+                        
+                        # 检查输出维度，处理不同形式的输出
+                        if output.shape[-1] == 2:  # 如果模型输出两个类别的分数
+                            # 使用softmax获取概率
+                            probs = F.softmax(output, dim=-1)
+                            # 获取垃圾短信（类别1）的概率
+                            model_spam_score = probs[0, 1].item()
+                            logging.info(f"使用CrossEntropy输出的深度学习模型预测成功: {model_type}, 分数: {model_spam_score:.4f}")
+                        else:
+                            # 兼容旧模型，单个输出使用sigmoid转换为概率
+                            model_spam_score = torch.sigmoid(output).item()
+                            logging.info(f"使用Sigmoid输出的深度学习模型预测成功: {model_type}, 分数: {model_spam_score:.4f}")
             except Exception as model_error:
                 logging.error(f"模型预测错误: {str(model_error)}")
                 logging.error(traceback.format_exc())

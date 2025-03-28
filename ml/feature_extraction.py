@@ -124,25 +124,55 @@ def generate_model_embedding(tokens, model_type):
     
     return embedding
 
-def extract_lstm_features(text, send_freq, is_night):
+def extract_lstm_features(text, send_freq, is_night, max_len=300, vocab_size=10000):
     """
-    为LSTM模型提取特征
+    为LSTM模型提取特征 - 将文本转换为序列索引
+    
+    参数:
+        text: 输入文本
+        send_freq: 发送频率
+        is_night: 是否夜间
+        max_len: 序列最大长度
+        vocab_size: 词汇表大小
+    
+    返回:
+        features: 整数索引序列
     """
     try:
         # 对文本进行分词
         tokens = tokenize(text)
         
-        # 模拟LSTM特征（实际应用中应使用预训练的词向量和LSTM模型）
-        # 在实际应用中，这里应该使用预训练的词向量和LSTM模型
-        embedding = np.random.rand(768)  # 模拟768维embedding
+        # 创建简单的词汇映射（实际应用中应从训练集构建词汇表）
+        # 这里我们简单地将词汇替换为索引
+        word_to_idx = {}
+        idx = 0
         
-        # 添加元数据
-        features = np.concatenate([embedding, [send_freq, is_night]])
+        # 将词转换为索引
+        indices = []
+        for token in tokens:
+            if token not in word_to_idx:
+                # 如果是新词，分配一个新索引
+                if idx < vocab_size - 2:  # 预留两个位置给OOV和PAD
+                    word_to_idx[token] = idx
+                    idx += 1
+                else:
+                    # OOV (Out of Vocabulary) 
+                    word_to_idx[token] = vocab_size - 2
+            
+            indices.append(word_to_idx[token])
         
-        return features
+        # 截断或填充序列到固定长度
+        if len(indices) > max_len:
+            indices = indices[:max_len]
+        else:
+            # PAD索引是vocab_size-1
+            indices = indices + [vocab_size-1] * (max_len - len(indices))
+            
+        return np.array(indices, dtype=np.int64)
     except Exception as e:
         logging.error(f"LSTM特征提取错误: {str(e)}")
-        return np.zeros(768 + 2)
+        # 返回全PAD的序列
+        return np.full(max_len, vocab_size-1, dtype=np.int64)
 
 def extract_cnn_features(text, send_freq, is_night):
     """

@@ -308,7 +308,7 @@ def train_model(model, features, labels, model_type, model_save_path, epochs=10,
             
             # 设置优化器和损失函数
             optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-            criterion = nn.BCEWithLogitsLoss()
+            criterion = nn.CrossEntropyLoss()  # 使用交叉熵损失，适用于Long类型标签
             
             # 训练循环
             for epoch in range(epochs):
@@ -319,14 +319,20 @@ def train_model(model, features, labels, model_type, model_save_path, epochs=10,
                     # 前向传播
                     outputs = model(batch_features)
                     
-                    # 确保输出和标签的维度匹配
-                    outputs = outputs.squeeze()  # 从 [batch_size, 1] 变为 [batch_size]
-                    if len(outputs.shape) == 0 and len(batch_labels.shape) == 0:
-                        # 处理单个样本的特殊情况
-                        outputs = outputs.unsqueeze(0)
-                        batch_labels = batch_labels.unsqueeze(0)
-                    
-                    loss = criterion(outputs, batch_labels)
+                    # 根据输出维度决定处理方式
+                    if len(outputs.shape) > 1 and outputs.shape[-1] == 2:
+                        # 双类输出 [batch_size, 2]，直接使用CrossEntropyLoss
+                        loss = criterion(outputs, batch_labels)
+                    else:
+                        # 旧模型：单值输出需要从 [batch_size, 1] 变为 [batch_size]
+                        outputs = outputs.squeeze()
+                        if len(outputs.shape) == 0 and len(batch_labels.shape) == 0:
+                            # 处理单个样本的特殊情况
+                            outputs = outputs.unsqueeze(0)
+                            batch_labels = batch_labels.unsqueeze(0)
+                        
+                        # 对于单值输出，使用BCEWithLogitsLoss
+                        loss = nn.functional.binary_cross_entropy_with_logits(outputs, batch_labels.float())
                     
                     # 反向传播
                     optimizer.zero_grad()
@@ -346,14 +352,22 @@ def train_model(model, features, labels, model_type, model_save_path, epochs=10,
                     
                     for batch_features, batch_labels in test_loader:
                         outputs = model(batch_features)
-                        # 确保输出和标签的维度匹配
-                        outputs = outputs.squeeze()  # 从 [batch_size, 1] 变为 [batch_size]
-                        if len(outputs.shape) == 0 and len(batch_labels.shape) == 0:
-                            # 处理单个样本的特殊情况
-                            outputs = outputs.unsqueeze(0)
-                            batch_labels = batch_labels.unsqueeze(0)
                         
-                        preds = torch.sigmoid(outputs) > 0.5
+                        # 根据输出维度决定处理方式
+                        if len(outputs.shape) > 1 and outputs.shape[-1] == 2:
+                            # 双类输出 [batch_size, 2]
+                            preds = torch.argmax(outputs, dim=1)
+                        else:
+                            # 单值输出
+                            outputs = outputs.squeeze()  # 从 [batch_size, 1] 变为 [batch_size]
+                            if len(outputs.shape) == 0 and len(batch_labels.shape) == 0:
+                                # 处理单个样本的特殊情况
+                                outputs = outputs.unsqueeze(0)
+                                batch_labels = batch_labels.unsqueeze(0)
+                            
+                            # 使用阈值0.5进行二分类
+                            preds = (torch.sigmoid(outputs) > 0.5).long()
+                        
                         y_pred.extend(preds.cpu().numpy())
                         y_true.extend(batch_labels.cpu().numpy())
                     
@@ -443,7 +457,7 @@ def cross_validate(model_class, features, labels, model_type, n_folds=5, epochs=
             
             # 设置优化器和损失函数
             optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-            criterion = nn.BCEWithLogitsLoss()
+            criterion = nn.CrossEntropyLoss()  # 使用交叉熵损失，适用于Long类型标签
             
             # 训练循环
             for epoch in range(epochs):
@@ -453,14 +467,20 @@ def cross_validate(model_class, features, labels, model_type, n_folds=5, epochs=
                 for batch_features, batch_labels in train_loader:
                     outputs = model(batch_features)
                     
-                    # 确保输出和标签的维度匹配
-                    outputs = outputs.squeeze()  # 从 [batch_size, 1] 变为 [batch_size]
-                    if len(outputs.shape) == 0 and len(batch_labels.shape) == 0:
-                        # 处理单个样本的特殊情况
-                        outputs = outputs.unsqueeze(0)
-                        batch_labels = batch_labels.unsqueeze(0)
-                    
-                    loss = criterion(outputs, batch_labels)
+                    # 根据输出维度决定处理方式
+                    if len(outputs.shape) > 1 and outputs.shape[-1] == 2:
+                        # 双类输出 [batch_size, 2]，直接使用CrossEntropyLoss
+                        loss = criterion(outputs, batch_labels)
+                    else:
+                        # 旧模型：单值输出需要从 [batch_size, 1] 变为 [batch_size]
+                        outputs = outputs.squeeze()
+                        if len(outputs.shape) == 0 and len(batch_labels.shape) == 0:
+                            # 处理单个样本的特殊情况
+                            outputs = outputs.unsqueeze(0)
+                            batch_labels = batch_labels.unsqueeze(0)
+                        
+                        # 对于单值输出，使用BCEWithLogitsLoss
+                        loss = nn.functional.binary_cross_entropy_with_logits(outputs, batch_labels.float())
                     
                     optimizer.zero_grad()
                     loss.backward()
@@ -479,14 +499,22 @@ def cross_validate(model_class, features, labels, model_type, n_folds=5, epochs=
                 
                 for batch_features, batch_labels in test_loader:
                     outputs = model(batch_features)
-                    # 确保输出和标签的维度匹配
-                    outputs = outputs.squeeze()  # 从 [batch_size, 1] 变为 [batch_size]
-                    if len(outputs.shape) == 0 and len(batch_labels.shape) == 0:
-                        # 处理单个样本的特殊情况
-                        outputs = outputs.unsqueeze(0)
-                        batch_labels = batch_labels.unsqueeze(0)
                     
-                    preds = torch.sigmoid(outputs) > 0.5
+                    # 根据输出维度决定处理方式
+                    if len(outputs.shape) > 1 and outputs.shape[-1] == 2:
+                        # 双类输出 [batch_size, 2]
+                        preds = torch.argmax(outputs, dim=1)
+                    else:
+                        # 单值输出
+                        outputs = outputs.squeeze()  # 从 [batch_size, 1] 变为 [batch_size]
+                        if len(outputs.shape) == 0 and len(batch_labels.shape) == 0:
+                            # 处理单个样本的特殊情况
+                            outputs = outputs.unsqueeze(0)
+                            batch_labels = batch_labels.unsqueeze(0)
+                        
+                        # 使用阈值0.5进行二分类
+                        preds = (torch.sigmoid(outputs) > 0.5).long()
+                    
                     y_pred.extend(preds.cpu().numpy())
                     y_true.extend(batch_labels.cpu().numpy())
                 

@@ -19,7 +19,7 @@
                     <h5 class="mb-0"><i class="fas fa-upload me-2"></i>上传新数据集</h5>
                 </div>
                 <div class="card-body">
-                    <form id="dataset-upload-form" enctype="multipart/form-data">
+                    <form id="dataset-upload-form" action="/save_dataset" method="post" enctype="multipart/form-data">
                         <div class="mb-3">
                             <label for="dataset-name" class="form-label">数据集名称</label>
                             <input type="text" class="form-control" id="dataset-name" name="name" placeholder="数据集名称">
@@ -126,16 +126,10 @@
                         <label for="use-model-type" class="form-label">模型类型</label>
                         <select class="form-select" id="use-model-type" name="model_type" required>
                             <option value="" disabled selected>-- 请选择模型类型 --</option>
-                            <option value="roberta">RoBERTa</option>
-                            <option value="bert">BERT</option>
                             <option value="lstm">LSTM</option>
-                            <option value="cnn">CNN</option>
-                            <option value="xlnet">XLNet</option>
-                            <option value="gpt">GPT</option>
-                            <option value="attention_lstm">Attention LSTM</option>
+                            <option value="residual_attention_lstm">Residual-Attention LSTM</option>
                             <option value="svm">SVM</option>
                             <option value="naive_bayes">朴素贝叶斯</option>
-                            <option value="ensemble">集成模型</option>
                         </select>
                     </div>
                 </form>
@@ -185,11 +179,9 @@
             saveCurrentPageState('datasets');
         }
         
-        // 设置表单提交事件
-        const datasetUploadForm = document.getElementById('dataset-upload-form');
-        if (datasetUploadForm) {
-            datasetUploadForm.addEventListener('submit', handleDatasetUpload);
-        }
+        // 表单已设置直接提交到后端
+        // 不再需要JavaScript事件监听
+        console.log('使用表单直接提交数据集');
         
         // 设置使用数据集按钮事件
         document.querySelectorAll('.use-dataset-btn').forEach(btn => {

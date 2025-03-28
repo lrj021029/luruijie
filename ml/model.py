@@ -31,10 +31,10 @@ model_cache = {}
 tokenizer_cache = {}
 
 class SMSLSTM(nn.Module):
-    """基于LSTM的垃圾短信分类器"""
-    def __init__(self, vocab_size=10000, embedding_dim=300, hidden_dim=128, n_layers=2, dropout=0.2):
+    """基于LSTM的垃圾短信分类器（简化版本）"""
+    def __init__(self, vocab_size=10000, embedding_dim=100, hidden_dim=64, n_layers=1, dropout=0.2):
         super(SMSLSTM, self).__init__()
-        # 词嵌入层，0为填充索引
+        # 词嵌入层，0为填充索引，使用更小的embedding_dim减少内存使用
         self.embedding = nn.Embedding(vocab_size, embedding_dim, padding_idx=0)
         self.lstm = nn.LSTM(
             embedding_dim,
@@ -83,14 +83,14 @@ class SMSLSTM(nn.Module):
             return torch.zeros((batch_size, 2), device=x.device)
 
 class ResidualAttentionLSTM(nn.Module):
-    """带有残差连接和注意力机制的LSTM垃圾短信分类器"""
-    def __init__(self, vocab_size=10000, embedding_dim=300, hidden_dim=128, n_layers=2, dropout=0.2):
+    """带有残差连接和注意力机制的LSTM垃圾短信分类器（简化版本）"""
+    def __init__(self, vocab_size=10000, embedding_dim=100, hidden_dim=64, n_layers=1, dropout=0.2):
         super(ResidualAttentionLSTM, self).__init__()
-        # 词嵌入层，0为填充索引
+        # 词嵌入层，0为填充索引，使用更小的embedding_dim减少内存使用
         self.embedding = nn.Embedding(vocab_size, embedding_dim, padding_idx=0)
         
-        # 主LSTM层
-        self.lstm1 = nn.LSTM(
+        # 单层LSTM，减少复杂度
+        self.lstm = nn.LSTM(
             embedding_dim,
             hidden_dim,
             num_layers=1,
@@ -98,43 +98,18 @@ class ResidualAttentionLSTM(nn.Module):
             bidirectional=True
         )
         
-        # 残差LSTM层
-        self.lstm2 = nn.LSTM(
-            hidden_dim*2,
-            hidden_dim,
-            num_layers=1,
-            batch_first=True,
-            bidirectional=True
-        )
-        
-        # 注意力层参数
+        # 简化的注意力机制
         self.attention = nn.Linear(hidden_dim * 2, 1)
         
-        # 全连接层
-        self.fc1 = nn.Linear(hidden_dim * 2, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, 2)  # 输出两个类别的分数
+        # 直接输出分类结果的全连接层
+        self.fc = nn.Linear(hidden_dim * 2, 2)  # 输出两个类别的分数
         
         # Dropout正则化
         self.dropout = nn.Dropout(dropout)
         
-        # Layer Normalization
-        self.layer_norm1 = nn.LayerNorm(hidden_dim * 2)
-        self.layer_norm2 = nn.LayerNorm(hidden_dim * 2)
-        
         # 保存超参数
         self.hidden_dim = hidden_dim
         self.embedding_dim = embedding_dim
-        
-    def attention_mechanism(self, lstm_output):
-        """自注意力机制，计算不同时间步的重要性"""
-        # lstm_output形状: [batch_size, seq_len, hidden_dim*2]
-        
-        # 计算注意力分数和权重
-        attn_weights = F.softmax(self.attention(lstm_output), dim=1)
-        
-        # 加权求和得到上下文向量
-        context = torch.sum(lstm_output * attn_weights, dim=1)  # [batch_size, hidden_dim*2]
-        return context, attn_weights
         
     def forward(self, x):
         # 确保输入是长整型
@@ -143,37 +118,27 @@ class ResidualAttentionLSTM(nn.Module):
         elif x.dtype != torch.long:
             x = x.long()
             
-        # 获取批次大小和序列长度
+        # 获取批次大小
         batch_size = x.size(0)
-        seq_len = x.size(1) if len(x.size()) > 1 else 1
         
         # 如果是一维张量，增加序列维度
         if len(x.size()) == 1:
             x = x.unsqueeze(1)
-            
-        # 应用词嵌入
+        
         try:
+            # 应用词嵌入
             embedded = self.dropout(self.embedding(x))
-            # embedded形状: [batch_size, seq_len, embedding_dim]
             
-            # 第一个LSTM层
-            lstm1_out, _ = self.lstm1(embedded)
-            # 应用Layer Normalization
-            norm_lstm1_out = self.layer_norm1(lstm1_out)
+            # LSTM处理
+            lstm_out, _ = self.lstm(embedded)
             
-            # 第二个LSTM层 (残差连接)
-            lstm2_out, _ = self.lstm2(norm_lstm1_out)
-            # 残差连接: 将第一层输出与第二层输出相加
-            residual_out = lstm2_out + norm_lstm1_out
-            # 应用Layer Normalization
-            norm_residual_out = self.layer_norm2(residual_out)
+            # 简化的注意力机制
+            # 计算注意力权重并应用
+            attn_weights = F.softmax(self.attention(lstm_out), dim=1)
+            context = torch.sum(lstm_out * attn_weights, dim=1)
             
-            # 应用注意力机制获取上下文向量
-            context, _ = self.attention_mechanism(norm_residual_out)
-            
-            # 全连接层
-            output = F.relu(self.fc1(self.dropout(context)))
-            output = self.fc2(self.dropout(output))
+            # 应用dropout并通过全连接层分类
+            output = self.fc(self.dropout(context))
             
             return output
         except Exception as e:

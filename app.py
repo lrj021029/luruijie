@@ -832,7 +832,7 @@ def train_model_endpoint():
         file_upload = request.files.get('file')
         model_type = request.form.get('model_type', 'roberta')
         epochs = int(request.form.get('epochs', 10))
-        batch_size = int(request.form.get('batch_size', 32))
+        batch_size = int(request.form.get('batch_size', 8))  # 减小默认批次大小以降低内存消耗
         learning_rate = float(request.form.get('learning_rate', 0.001))
         
         # 获取用户指定的文本列和标签列
@@ -1531,7 +1531,7 @@ def use_csv_file():
                     model_type=model_type,
                     model_save_path=model_save_path,
                     epochs=5,  # 默认训练5轮
-                    batch_size=32,
+                    batch_size=8,  # 减小批次大小以降低内存消耗
                     learning_rate=0.001
                 )
                 

@@ -124,16 +124,16 @@ def generate_model_embedding(tokens, model_type):
     
     return embedding
 
-def extract_lstm_features(text, send_freq, is_night, max_len=100, vocab_size=10000):
+def extract_lstm_features(text, send_freq, is_night, max_len=50, vocab_size=5000):
     """
-    为LSTM模型提取特征 - 将文本转换为词索引序列
+    为LSTM模型提取特征 - 将文本转换为词索引序列（优化版本）
     
     参数:
         text: 输入文本
         send_freq: 发送频率
         is_night: 是否夜间
-        max_len: 序列最大长度
-        vocab_size: 词汇表大小
+        max_len: 序列最大长度，减少到50（减少内存使用）
+        vocab_size: 词汇表大小，减少到5000（减少内存使用）
     
     返回:
         features: 整数索引序列
@@ -142,23 +142,14 @@ def extract_lstm_features(text, send_freq, is_night, max_len=100, vocab_size=100
         # 对文本进行分词
         tokens = tokenize(text)
         
-        # 创建简单的词汇映射
-        word_to_idx = {}
-        idx = 1  # 索引0保留给填充
-        
-        # 将词转换为索引
+        # 使用哈希函数保持一致性的词汇映射
+        # 这样每次运行得到的词索引都是一致的
         indices = []
         for token in tokens:
-            if token not in word_to_idx:
-                # 如果是新词，分配一个新索引
-                if idx < vocab_size - 1:  # 预留一个位置给OOV
-                    word_to_idx[token] = idx
-                    idx += 1
-                else:
-                    # OOV (Out of Vocabulary) 
-                    word_to_idx[token] = vocab_size - 1
-            
-            indices.append(word_to_idx[token])
+            # 将词转换为一个数字（哈希值）
+            # 确保数值范围在1到vocab_size-2之间（0用于padding，vocab_size-1用于OOV）
+            hash_value = hash(token) % (vocab_size - 2) + 1
+            indices.append(hash_value)
         
         # 截断或填充序列到固定长度
         if len(indices) > max_len:

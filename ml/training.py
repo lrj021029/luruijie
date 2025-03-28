@@ -228,7 +228,7 @@ def load_data(filepath, text_column='', label_column=''):
         logging.exception("详细错误信息:")
         return None, None
 
-def train_model(model, features, labels, model_type, model_save_path, epochs=10, batch_size=32, learning_rate=0.001):
+def train_model(model, features, labels, model_type, model_save_path, epochs=10, batch_size=8, learning_rate=0.001):
     """
     训练模型
     
@@ -452,7 +452,7 @@ def train_model(model, features, labels, model_type, model_save_path, epochs=10,
             'f1': 0.8
         }
 
-def cross_validate(model_class, features, labels, model_type, n_folds=5, epochs=5, batch_size=32, learning_rate=0.001):
+def cross_validate(model_class, features, labels, model_type, n_folds=5, epochs=5, batch_size=8, learning_rate=0.001):
     """
     使用K折交叉验证评估模型
     

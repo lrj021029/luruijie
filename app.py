@@ -1290,24 +1290,14 @@ def save_dataset():
         db.session.add(new_dataset)
         db.session.commit()
         
-        return jsonify({
-            'success': True,
-            'dataset': {
-                'id': new_dataset.id,
-                'name': new_dataset.name,
-                'filename': new_dataset.filename,
-                'description': new_dataset.description,
-                'total_records': new_dataset.total_records,
-                'spam_count': new_dataset.spam_count,
-                'ham_count': new_dataset.ham_count,
-                'upload_time': new_dataset.upload_time.strftime('%Y-%m-%d %H:%M:%S')
-            }
-        })
+        flash('数据集已成功上传', 'success')
+        return redirect(url_for('datasets'))
     
     except Exception as e:
         logging.error(f"保存数据集错误: {str(e)}")
         logging.error(traceback.format_exc())
-        return jsonify({'error': str(e)}), 500
+        flash(f'上传数据集失败: {str(e)}', 'danger')
+        return redirect(url_for('datasets'))
 
 @app.route('/delete_dataset/<int:dataset_id>', methods=['DELETE'])
 def delete_dataset(dataset_id):
@@ -1328,11 +1318,13 @@ def delete_dataset(dataset_id):
         db.session.delete(dataset)
         db.session.commit()
         
+        flash('数据集已成功删除', 'success')
         return jsonify({'success': True})
     
     except Exception as e:
         logging.error(f"删除数据集错误: {str(e)}")
         logging.error(traceback.format_exc())
+        flash(f'删除数据集失败: {str(e)}', 'danger')
         return jsonify({'error': str(e)}), 500
 
 @app.route('/use_dataset/<int:dataset_id>', methods=['POST'])

@@ -9,6 +9,12 @@
     --info-color: #4fc0e8;
     --dark-color: #343a40;
     --light-color: #f8f9fa;
+    
+    /* 混淆矩阵颜色 */
+    --true-positive-color: rgba(55, 188, 155, 0.25);
+    --true-negative-color: rgba(79, 192, 232, 0.25);
+    --false-positive-color: rgba(233, 193, 84, 0.25);
+    --false-negative-color: rgba(218, 68, 83, 0.25);
 }
 
 /* 应用内容区域设置最小高度，避免短页面 */
@@ -276,4 +282,88 @@
         top: 24px;
         height: 32px;
     }
+}
+
+/* 混淆矩阵样式 */
+.cm-table {
+    text-align: center;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.cm-table th {
+    font-weight: bold;
+    background-color: rgba(0, 0, 0, 0.03);
+}
+
+.cm-table td {
+    position: relative;
+    padding: 1rem;
+    font-weight: bold;
+}
+
+.cm-value {
+    display: block;
+    font-size: 1.2rem;
+    margin-bottom: 0.25rem;
+}
+
+.cm-percent {
+    display: block;
+    font-size: 0.875rem;
+    opacity: 0.7;
+}
+
+.true-positive {
+    background-color: var(--true-positive-color);
+}
+
+.true-negative {
+    background-color: var(--true-negative-color);
+}
+
+.false-positive {
+    background-color: var(--false-positive-color);
+}
+
+.false-negative {
+    background-color: var(--false-negative-color);
+}
+
+.cm-summary {
+    font-size: 0.9rem;
+}
+
+.metric-item {
+    margin-bottom: 0.5rem;
+}
+
+.metric-name {
+    font-weight: bold;
+    margin-right: 0.5rem;
+}
+
+.metric-value {
+    font-weight: normal;
+}
+
+/* 暗模式下混淆矩阵调整 */
+[data-bs-theme="dark"] .cm-table th {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+[data-bs-theme="dark"] .true-positive {
+    background-color: rgba(55, 188, 155, 0.15);
+}
+
+[data-bs-theme="dark"] .true-negative {
+    background-color: rgba(79, 192, 232, 0.15);
+}
+
+[data-bs-theme="dark"] .false-positive {
+    background-color: rgba(233, 193, 84, 0.15);
+}
+
+[data-bs-theme="dark"] .false-negative {
+    background-color: rgba(218, 68, 83, 0.15);
 }

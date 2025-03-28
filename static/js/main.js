@@ -1381,39 +1381,110 @@ function renderModelMetricsChart(container, data) {
     
     countTableDiv.innerHTML = tableHTML;
     
-    // 创建模型数据表格
-    const tableContainer = document.createElement('div');
-    tableContainer.className = 'mt-4';
-    tableContainer.innerHTML = `
-        <h5 class="text-center">模型性能数据表</h5>
-        <div class="table-responsive">
-            <table class="table table-bordered table-hover">
-                <thead class="table-dark">
-                    <tr>
-                        <th>模型</th>
-                        <th>准确率</th>
-                        <th>精确率</th>
-                        <th>召回率</th>
-                        <th>F1分数</th>
-                        <th>样本数量</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${models.map(model => `
-                        <tr>
-                            <td>${model}</td>
-                            <td>${(data[model].accuracy * 100).toFixed(1)}%</td>
-                            <td>${(data[model].precision * 100).toFixed(1)}%</td>
-                            <td>${(data[model].recall * 100).toFixed(1)}%</td>
-                            <td>${(data[model].f1_score * 100).toFixed(1)}%</td>
-                            <td>${data[model].count}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        </div>
-    `;
-    container.appendChild(tableContainer);
+    // 创建混淆矩阵容器
+    const confusionMatrixContainer = document.createElement('div');
+    confusionMatrixContainer.className = 'row mt-4';
+    container.appendChild(confusionMatrixContainer);
+    
+    // 为每个模型创建混淆矩阵
+    models.forEach(model => {
+        if (!data[model].confusion_matrix) return;
+        
+        // 获取混淆矩阵数据
+        const cm = data[model].confusion_matrix;
+        
+        // 创建列
+        const colDiv = document.createElement('div');
+        colDiv.className = 'col-md-6 mb-4';
+        confusionMatrixContainer.appendChild(colDiv);
+        
+        // 创建卡片
+        const cardDiv = document.createElement('div');
+        cardDiv.className = 'card h-100';
+        colDiv.appendChild(cardDiv);
+        
+        // 卡片标题
+        const cardHeader = document.createElement('div');
+        cardHeader.className = 'card-header';
+        cardHeader.textContent = `${modelDisplayNames[model] || model} 混淆矩阵`;
+        cardDiv.appendChild(cardHeader);
+        
+        // 卡片内容
+        const cardBody = document.createElement('div');
+        cardBody.className = 'card-body';
+        cardDiv.appendChild(cardBody);
+        
+        // 计算总样本数和百分比
+        const total = cm[0][0] + cm[0][1] + cm[1][0] + cm[1][1];
+        const getPercent = (value) => ((value / total) * 100).toFixed(1) + '%';
+        
+        // 创建混淆矩阵表
+        const matrixTable = document.createElement('table');
+        matrixTable.className = 'table table-bordered cm-table';
+        matrixTable.innerHTML = `
+            <thead>
+                <tr>
+                    <th></th>
+                    <th class="text-center">预测: 正常</th>
+                    <th class="text-center">预测: 垃圾</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <th>实际: 正常</th>
+                    <td class="text-center true-negative">
+                        <span class="cm-value">${cm[0][0]}</span>
+                        <span class="cm-percent">${getPercent(cm[0][0])}</span>
+                    </td>
+                    <td class="text-center false-positive">
+                        <span class="cm-value">${cm[0][1]}</span>
+                        <span class="cm-percent">${getPercent(cm[0][1])}</span>
+                    </td>
+                </tr>
+                <tr>
+                    <th>实际: 垃圾</th>
+                    <td class="text-center false-negative">
+                        <span class="cm-value">${cm[1][0]}</span>
+                        <span class="cm-percent">${getPercent(cm[1][0])}</span>
+                    </td>
+                    <td class="text-center true-positive">
+                        <span class="cm-value">${cm[1][1]}</span>
+                        <span class="cm-percent">${getPercent(cm[1][1])}</span>
+                    </td>
+                </tr>
+            </tbody>
+        `;
+        cardBody.appendChild(matrixTable);
+        
+        // 添加指标摘要
+        const metricSummary = document.createElement('div');
+        metricSummary.className = 'mt-3 cm-summary';
+        metricSummary.innerHTML = `
+            <div class="row">
+                <div class="col-6">
+                    <div class="metric-item">
+                        <span class="metric-name">准确率:</span>
+                        <span class="metric-value">${(data[model].accuracy * 100).toFixed(1)}%</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-name">精确率:</span>
+                        <span class="metric-value">${(data[model].precision * 100).toFixed(1)}%</span>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="metric-item">
+                        <span class="metric-name">召回率:</span>
+                        <span class="metric-value">${(data[model].recall * 100).toFixed(1)}%</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-name">F1分数:</span>
+                        <span class="metric-value">${(data[model].f1_score * 100).toFixed(1)}%</span>
+                    </div>
+                </div>
+            </div>
+        `;
+        cardBody.appendChild(metricSummary);
+    });
 }
 
 // 初始化漂移图表

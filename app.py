@@ -829,8 +829,7 @@ def train_model_endpoint():
     """训练模型并保存"""
     try:
         # 获取请求数据
-        file_upload = request.files.get('file')
-        model_type = request.form.get('model_type', 'roberta')
+        model_type = request.form.get('model_type', 'naive_bayes')
         epochs = int(request.form.get('epochs', 10))
         batch_size = int(request.form.get('batch_size', 8))  # 减小默认批次大小以降低内存消耗
         learning_rate = float(request.form.get('learning_rate', 0.001))
@@ -839,34 +838,78 @@ def train_model_endpoint():
         text_column = request.form.get('text_column', '')
         label_column = request.form.get('label_column', '')
         
+        # 获取数据源类型
+        data_source = request.form.get('data_source', 'upload')
+        
         # 验证模型类型是否有效
         if model_type not in model_types:
             return jsonify({'error': f'无效的模型类型: {model_type}'}), 400
         
-        # 确保上传了文件
-        if not file_upload:
-            return jsonify({'error': '未上传训练数据文件'}), 400
-        
-        # 保存文件
-        filename = secure_filename(file_upload.filename)
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file_upload.save(filepath)
-        
-        # 尝试预览并获取列名
-        try:
-            df = pd.read_csv(filepath, nrows=1)
-            columns = df.columns.tolist()
+        # 根据数据源类型处理
+        if data_source == 'existing':
+            # 使用现有数据集
+            dataset_id = request.form.get('dataset_id')
+            if not dataset_id:
+                return jsonify({'error': '未选择数据集'}), 400
+                
+            # 查找数据集
+            dataset = Dataset.query.get(dataset_id)
+            if not dataset:
+                return jsonify({'error': f'找不到ID为{dataset_id}的数据集'}), 404
+                
+            # 使用数据集文件路径
+            filepath = dataset.file_path
             
-            # 如果用户没有指定列，但提供了文件预览信息
-            if (not text_column or not label_column) and 'preview_data' in request.form:
-                return jsonify({
-                    'success': False,
-                    'error': '请选择文本列和标签列',
-                    'columns': columns,
-                    'preview_needed': True
-                }), 400
-        except Exception as e:
-            logging.error(f"读取CSV预览失败: {str(e)}")
+            # 更新数据集的最后使用时间
+            dataset.last_used = datetime.now()
+            db.session.commit()
+            
+            # 尝试预览并获取列名
+            try:
+                df = pd.read_csv(filepath, nrows=1)
+                columns = df.columns.tolist()
+                
+                # 如果用户没有指定列，但提供了文件预览信息
+                if (not text_column or not label_column) and 'preview_data' in request.form:
+                    return jsonify({
+                        'success': False,
+                        'error': '请选择文本列和标签列',
+                        'columns': columns,
+                        'preview_needed': True
+                    }), 400
+            except Exception as e:
+                logging.error(f"读取数据集预览失败: {str(e)}")
+                return jsonify({'error': f'读取数据集失败: {str(e)}'}), 500
+            
+        else:  # data_source == 'upload'
+            # 使用上传的文件
+            file_upload = request.files.get('file')
+            
+            # 确保上传了文件
+            if not file_upload:
+                return jsonify({'error': '未上传训练数据文件'}), 400
+            
+            # 保存文件
+            filename = secure_filename(file_upload.filename)
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file_upload.save(filepath)
+            
+            # 尝试预览并获取列名
+            try:
+                df = pd.read_csv(filepath, nrows=1)
+                columns = df.columns.tolist()
+                
+                # 如果用户没有指定列，但提供了文件预览信息
+                if (not text_column or not label_column) and 'preview_data' in request.form:
+                    return jsonify({
+                        'success': False,
+                        'error': '请选择文本列和标签列',
+                        'columns': columns,
+                        'preview_needed': True
+                    }), 400
+            except Exception as e:
+                logging.error(f"读取CSV预览失败: {str(e)}")
+                return jsonify({'error': f'读取CSV文件失败: {str(e)}'}), 500
         
         # 尝试加载数据，如果指定了列名则使用
         features, labels = training.load_data(filepath, text_column, label_column)
@@ -912,8 +955,9 @@ def train_model_endpoint():
             learning_rate=learning_rate
         )
         
-        # 删除上传的文件
-        os.remove(filepath)
+        # 如果是上传的文件，删除临时文件（如果是数据集文件则不删除）
+        if data_source == 'upload':
+            os.remove(filepath)
         
         # 更新全局模型缓存
         if trained_model is not None:

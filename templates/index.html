@@ -180,9 +180,36 @@
                 <!-- 训练表单 -->
                 <form id="train-model-form" enctype="multipart/form-data">
                     <div class="mb-3">
+                        <label class="form-label">选择数据源</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="data_source" id="data-source-upload" value="upload" checked>
+                            <label class="form-check-label" for="data-source-upload">
+                                上传新文件
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="data_source" id="data-source-existing" value="existing">
+                            <label class="form-check-label" for="data-source-existing">
+                                使用已有数据集
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- 上传新文件区域 -->
+                    <div id="upload-file-area" class="mb-3">
                         <label for="training-file" class="form-label">上传训练数据 (CSV文件)</label>
                         <input type="file" class="form-control" id="training-file" name="file" accept=".csv" required>
                         <div class="form-text">CSV文件必须包含文本内容列和标签列（0:正常短信/1:垃圾短信 或 ham/spam）</div>
+                    </div>
+                    
+                    <!-- 选择现有数据集区域 -->
+                    <div id="existing-dataset-area" class="mb-3" style="display: none;">
+                        <label for="dataset-select" class="form-label">选择已有数据集</label>
+                        <select class="form-select" id="dataset-select" name="dataset_id">
+                            <option value="" disabled selected>-- 加载中... --</option>
+                            <!-- 数据集列表会通过JS动态加载 -->
+                        </select>
+                        <div class="form-text">选择一个已有的数据集用于训练模型</div>
                     </div>
                     
                     <div class="mb-3">

@@ -303,8 +303,13 @@ function filterByResult(result) {
     const rows = document.querySelectorAll('#history-table tbody tr');
     
     rows.forEach(row => {
-        const predictionCell = row.cells[4];
-        if (predictionCell && predictionCell.textContent === result) {
+        const predictionCell = row.cells[5]; // 修正索引，预测结果在第6列（索引为5）
+        
+        // 检查单元格内部的badge元素文本
+        const badgeElement = predictionCell.querySelector('.badge');
+        const predictionText = badgeElement ? badgeElement.textContent.trim() : '';
+        
+        if (predictionText === result) {
             row.style.display = '';
         } else {
             row.style.display = 'none';
@@ -332,13 +337,13 @@ function showDetails(id) {
     if (!row) return;
     
     // 提取单元格数据
-    const text = row.cells[1].textContent;
-    const sendFreq = row.cells[2].textContent;
-    const isNight = row.cells[3].textContent;
-    const prediction = row.cells[4].textContent;
-    const confidence = row.cells[5].textContent;
-    const model = row.cells[6].textContent;
-    const timestamp = row.cells[7].textContent;
+    const text = row.cells[2].textContent;        // 短信内容
+    const sendFreq = row.cells[3].textContent;    // 发送频率
+    const isNight = row.cells[4].textContent;     // 夜间发送
+    const prediction = row.cells[5].textContent;  // 预测结果
+    const confidence = row.cells[6].textContent;  // 置信度
+    const model = row.cells[7].textContent;       // 使用模型
+    const timestamp = row.cells[8].textContent;   // 时间
     
     // 设置模态框标题
     document.getElementById('detailModalLabel').textContent = 
@@ -392,13 +397,20 @@ function updateCharts() {
         .filter(row => row.style.display !== 'none');
     
     // 计算预测结果分布
-    const spamCount = visibleRows.filter(row => row.cells[4].textContent === '垃圾短信').length;
-    const hamCount = visibleRows.filter(row => row.cells[4].textContent === '正常短信').length;
+    const spamCount = visibleRows.filter(row => {
+        const badgeEl = row.cells[5].querySelector('.badge');
+        return badgeEl && badgeEl.textContent.trim() === '垃圾短信';
+    }).length;
+    
+    const hamCount = visibleRows.filter(row => {
+        const badgeEl = row.cells[5].querySelector('.badge');
+        return badgeEl && badgeEl.textContent.trim() === '正常短信';
+    }).length;
     
     // 计算模型使用统计
     const modelCounts = {};
     visibleRows.forEach(row => {
-        const model = row.cells[6].textContent;
+        const model = row.cells[7].textContent.trim();
         modelCounts[model] = (modelCounts[model] || 0) + 1;
     });
     

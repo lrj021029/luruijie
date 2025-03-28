@@ -19,6 +19,69 @@ function setupModelTraining() {
     const trainResultDiv = document.querySelector('.train-result');
     const trainResultContent = document.getElementById('train-result-content');
     
+    // 数据源切换处理
+    const dataSourceUpload = document.getElementById('data-source-upload');
+    const dataSourceExisting = document.getElementById('data-source-existing');
+    const uploadFileArea = document.getElementById('upload-file-area');
+    const existingDatasetArea = document.getElementById('existing-dataset-area');
+    const trainingFileInput = document.getElementById('training-file');
+    const datasetSelect = document.getElementById('dataset-select');
+    
+    // 切换数据源选择
+    dataSourceUpload.addEventListener('change', function() {
+        if (this.checked) {
+            uploadFileArea.style.display = 'block';
+            existingDatasetArea.style.display = 'none';
+            trainingFileInput.setAttribute('required', 'required');
+            datasetSelect.removeAttribute('required');
+        }
+    });
+    
+    dataSourceExisting.addEventListener('change', function() {
+        if (this.checked) {
+            uploadFileArea.style.display = 'none';
+            existingDatasetArea.style.display = 'block';
+            trainingFileInput.removeAttribute('required');
+            datasetSelect.setAttribute('required', 'required');
+            
+            // 加载数据集列表
+            loadDatasetOptions();
+        }
+    });
+    
+    // 加载数据集选项
+    async function loadDatasetOptions() {
+        try {
+            const response = await fetch('/get_datasets');
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.error || '获取数据集失败');
+            }
+            
+            // 清空下拉框并添加提示选项
+            datasetSelect.innerHTML = '<option value="" disabled selected>-- 请选择数据集 --</option>';
+            
+            // 检查是否有数据集
+            if (data.datasets && data.datasets.length > 0) {
+                // 添加数据集选项
+                data.datasets.forEach(dataset => {
+                    datasetSelect.innerHTML += `
+                        <option value="${dataset.id}">
+                            ${dataset.name} (${dataset.total_records}条记录)
+                        </option>
+                    `;
+                });
+            } else {
+                // 无数据集时显示提示
+                datasetSelect.innerHTML = '<option value="" disabled selected>-- 没有可用的数据集 --</option>';
+            }
+        } catch (error) {
+            console.error('加载数据集错误:', error);
+            datasetSelect.innerHTML = '<option value="" disabled selected>-- 加载出错 --</option>';
+        }
+    }
+    
     // 添加模型训练表单提交事件
     trainModelForm.addEventListener('submit', async function(event) {
         event.preventDefault();

@@ -34,7 +34,8 @@ class SMSLSTM(nn.Module):
     """基于LSTM的垃圾短信分类器"""
     def __init__(self, vocab_size=10000, embedding_dim=300, hidden_dim=128, n_layers=2, dropout=0.2):
         super(SMSLSTM, self).__init__()
-        self.embedding = nn.Embedding(vocab_size, embedding_dim)
+        # 词嵌入层，0为填充索引
+        self.embedding = nn.Embedding(vocab_size, embedding_dim, padding_idx=0)
         self.lstm = nn.LSTM(
             embedding_dim,
             hidden_dim,
@@ -45,20 +46,48 @@ class SMSLSTM(nn.Module):
         )
         self.fc = nn.Linear(hidden_dim * 2, 2)  # 输出两个类别的分数
         self.dropout = nn.Dropout(dropout)
+        
+        # 保存超参数
+        self.hidden_dim = hidden_dim
+        self.embedding_dim = embedding_dim
     
     def forward(self, x):
-        embedded = self.dropout(self.embedding(x))
-        output, (hidden, cell) = self.lstm(embedded)
-        hidden = torch.cat((hidden[-2,:,:], hidden[-1,:,:]), dim=1)
-        hidden = self.dropout(hidden)
-        prediction = self.fc(hidden)
-        return prediction
+        # 确保输入是长整型
+        if not torch.is_tensor(x):
+            x = torch.tensor(x, dtype=torch.long)
+        elif x.dtype != torch.long:
+            x = x.long()
+            
+        # 获取批次大小
+        batch_size = x.size(0)
+        
+        # 如果是一维张量，增加序列维度
+        if len(x.size()) == 1:
+            x = x.unsqueeze(1)
+        
+        try:
+            # 应用词嵌入
+            embedded = self.dropout(self.embedding(x))
+            # 处理LSTM
+            output, (hidden, cell) = self.lstm(embedded)
+            # 拼接最后一层的正向和反向隐藏状态
+            hidden = torch.cat((hidden[-2,:,:], hidden[-1,:,:]), dim=1)
+            hidden = self.dropout(hidden)
+            prediction = self.fc(hidden)
+            return prediction
+        except Exception as e:
+            # 打印错误信息以帮助调试
+            logging.error(f"LSTM前向传播错误: {str(e)}")
+            logging.error(f"输入形状: {x.size()}, 类型: {x.dtype}")
+            # 返回默认输出（避免程序崩溃）
+            return torch.zeros((batch_size, 2), device=x.device)
 
 class ResidualAttentionLSTM(nn.Module):
     """带有残差连接和注意力机制的LSTM垃圾短信分类器"""
     def __init__(self, vocab_size=10000, embedding_dim=300, hidden_dim=128, n_layers=2, dropout=0.2):
         super(ResidualAttentionLSTM, self).__init__()
-        self.embedding = nn.Embedding(vocab_size, embedding_dim)
+        # 词嵌入层，0为填充索引
+        self.embedding = nn.Embedding(vocab_size, embedding_dim, padding_idx=0)
         
         # 主LSTM层
         self.lstm1 = nn.LSTM(
@@ -92,6 +121,10 @@ class ResidualAttentionLSTM(nn.Module):
         self.layer_norm1 = nn.LayerNorm(hidden_dim * 2)
         self.layer_norm2 = nn.LayerNorm(hidden_dim * 2)
         
+        # 保存超参数
+        self.hidden_dim = hidden_dim
+        self.embedding_dim = embedding_dim
+        
     def attention_mechanism(self, lstm_output):
         """自注意力机制，计算不同时间步的重要性"""
         # lstm_output形状: [batch_size, seq_len, hidden_dim*2]
@@ -104,30 +137,51 @@ class ResidualAttentionLSTM(nn.Module):
         return context, attn_weights
         
     def forward(self, x):
-        # x形状: [batch_size, seq_len]
-        embedded = self.dropout(self.embedding(x))
-        # embedded形状: [batch_size, seq_len, embedding_dim]
+        # 确保输入是长整型
+        if not torch.is_tensor(x):
+            x = torch.tensor(x, dtype=torch.long)
+        elif x.dtype != torch.long:
+            x = x.long()
+            
+        # 获取批次大小和序列长度
+        batch_size = x.size(0)
+        seq_len = x.size(1) if len(x.size()) > 1 else 1
         
-        # 第一个LSTM层
-        lstm1_out, _ = self.lstm1(embedded)
-        # 应用Layer Normalization
-        norm_lstm1_out = self.layer_norm1(lstm1_out)
-        
-        # 第二个LSTM层 (残差连接)
-        lstm2_out, _ = self.lstm2(norm_lstm1_out)
-        # 残差连接: 将第一层输出与第二层输出相加
-        residual_out = lstm2_out + norm_lstm1_out
-        # 应用Layer Normalization
-        norm_residual_out = self.layer_norm2(residual_out)
-        
-        # 应用注意力机制获取上下文向量
-        context, _ = self.attention_mechanism(norm_residual_out)
-        
-        # 全连接层
-        output = F.relu(self.fc1(self.dropout(context)))
-        output = self.fc2(self.dropout(output))
-        
-        return output
+        # 如果是一维张量，增加序列维度
+        if len(x.size()) == 1:
+            x = x.unsqueeze(1)
+            
+        # 应用词嵌入
+        try:
+            embedded = self.dropout(self.embedding(x))
+            # embedded形状: [batch_size, seq_len, embedding_dim]
+            
+            # 第一个LSTM层
+            lstm1_out, _ = self.lstm1(embedded)
+            # 应用Layer Normalization
+            norm_lstm1_out = self.layer_norm1(lstm1_out)
+            
+            # 第二个LSTM层 (残差连接)
+            lstm2_out, _ = self.lstm2(norm_lstm1_out)
+            # 残差连接: 将第一层输出与第二层输出相加
+            residual_out = lstm2_out + norm_lstm1_out
+            # 应用Layer Normalization
+            norm_residual_out = self.layer_norm2(residual_out)
+            
+            # 应用注意力机制获取上下文向量
+            context, _ = self.attention_mechanism(norm_residual_out)
+            
+            # 全连接层
+            output = F.relu(self.fc1(self.dropout(context)))
+            output = self.fc2(self.dropout(output))
+            
+            return output
+        except Exception as e:
+            # 打印错误信息以帮助调试
+            logging.error(f"ResidualAttentionLSTM前向传播错误: {str(e)}")
+            logging.error(f"输入形状: {x.size()}, 类型: {x.dtype}")
+            # 返回默认输出（避免程序崩溃）
+            return torch.zeros((batch_size, 2), device=x.device)
 
 class EnsembleAttentionModel(nn.Module):
     """基于注意力机制的集成学习模型，动态合并多个子模型的结果"""

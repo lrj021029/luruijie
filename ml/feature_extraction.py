@@ -124,9 +124,9 @@ def generate_model_embedding(tokens, model_type):
     
     return embedding
 
-def extract_lstm_features(text, send_freq, is_night, max_len=300, vocab_size=10000):
+def extract_lstm_features(text, send_freq, is_night, max_len=100, vocab_size=10000):
     """
-    为LSTM模型提取特征 - 将文本转换为序列索引
+    为LSTM模型提取特征 - 将文本转换为词索引序列
     
     参数:
         text: 输入文本
@@ -142,22 +142,21 @@ def extract_lstm_features(text, send_freq, is_night, max_len=300, vocab_size=100
         # 对文本进行分词
         tokens = tokenize(text)
         
-        # 创建简单的词汇映射（实际应用中应从训练集构建词汇表）
-        # 这里我们简单地将词汇替换为索引
+        # 创建简单的词汇映射
         word_to_idx = {}
-        idx = 0
+        idx = 1  # 索引0保留给填充
         
         # 将词转换为索引
         indices = []
         for token in tokens:
             if token not in word_to_idx:
                 # 如果是新词，分配一个新索引
-                if idx < vocab_size - 2:  # 预留两个位置给OOV和PAD
+                if idx < vocab_size - 1:  # 预留一个位置给OOV
                     word_to_idx[token] = idx
                     idx += 1
                 else:
                     # OOV (Out of Vocabulary) 
-                    word_to_idx[token] = vocab_size - 2
+                    word_to_idx[token] = vocab_size - 1
             
             indices.append(word_to_idx[token])
         
@@ -165,14 +164,15 @@ def extract_lstm_features(text, send_freq, is_night, max_len=300, vocab_size=100
         if len(indices) > max_len:
             indices = indices[:max_len]
         else:
-            # PAD索引是vocab_size-1
-            indices = indices + [vocab_size-1] * (max_len - len(indices))
+            # PAD索引是0
+            indices = indices + [0] * (max_len - len(indices))
             
+        # 确保特征仅包含词索引
         return np.array(indices, dtype=np.int64)
     except Exception as e:
         logging.error(f"LSTM特征提取错误: {str(e)}")
         # 返回全PAD的序列
-        return np.full(max_len, vocab_size-1, dtype=np.int64)
+        return np.zeros(max_len, dtype=np.int64)
 
 def extract_cnn_features(text, send_freq, is_night):
     """

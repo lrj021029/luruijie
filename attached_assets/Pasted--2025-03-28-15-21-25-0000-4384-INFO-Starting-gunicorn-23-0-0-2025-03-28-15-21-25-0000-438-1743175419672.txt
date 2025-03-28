@@ -1,0 +1,136 @@
+[2025-03-28 15:21:25 +0000] [4384] [INFO] Starting gunicorn 23.0.0
+[2025-03-28 15:21:25 +0000] [4384] [INFO] Listening at: http://0.0.0.0:5000 (4384)
+[2025-03-28 15:21:25 +0000] [4384] [INFO] Using worker: sync
+[2025-03-28 15:21:25 +0000] [4395] [INFO] Booting worker with pid: 4395
+[2025-03-28 15:21:25 +0000] [4384] [INFO] Handling signal: winch
+[2025-03-28 15:21:25 +0000] [4384] [INFO] Handling signal: winch
+[2025-03-28 15:21:25 +0000] [4384] [INFO] Handling signal: winch
+[2025-03-28 15:21:26 +0000] [4384] [INFO] Handling signal: winch
+[2025-03-28 15:21:26 +0000] [4384] [INFO] Handling signal: winch
+[2025-03-28 15:21:26 +0000] [4384] [INFO] Handling signal: winch
+[2025-03-28 15:21:27 +0000] [4384] [INFO] Handling signal: winch
+INFO:root:成功导入torch库
+INFO:root:已禁用TensorFlow，使用替代方法
+INFO:root:成功导入torch库
+INFO:root:成功导入torch库，用于语义漂移检测
+[2025-03-28 15:21:27 +0000] [4384] [INFO] Handling signal: winch
+[2025-03-28 15:21:27 +0000] [4384] [INFO] Handling signal: winch
+[2025-03-28 15:21:27 +0000] [4384] [INFO] Handling signal: winch
+[2025-03-28 15:21:28 +0000] [4384] [INFO] Handling signal: winch
+DEBUG:matplotlib:matplotlib data path: /home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/matplotlib/mpl-data
+DEBUG:matplotlib:CONFIGDIR=/home/runner/workspace/.config/matplotlib
+DEBUG:matplotlib:interactive is False
+DEBUG:matplotlib:platform is linux
+[2025-03-28 15:21:28 +0000] [4384] [INFO] Handling signal: winch
+[2025-03-28 15:21:28 +0000] [4384] [INFO] Handling signal: winch
+DEBUG:matplotlib:CACHEDIR=/home/runner/workspace/.cache/matplotlib
+DEBUG:matplotlib.font_manager:Using fontManager instance from /home/runner/workspace/.cache/matplotlib/fontlist-v390.json
+[2025-03-28 15:21:28 +0000] [4384] [INFO] Handling signal: winch
+[2025-03-28 15:21:28 +0000] [4384] [INFO] Handling signal: winch
+[2025-03-28 15:21:28 +0000] [4384] [INFO] Handling signal: winch
+INFO:root:正在加载 naive_bayes 模型...
+INFO:root:加载保存的模型: ml/saved_models/naive_bayes_20250328_150603.pkl
+INFO:root:尝试加载保存的传统机器学习模型: ml/saved_models/naive_bayes_20250328_150603.pkl
+INFO:root:成功加载传统机器学习模型(字典格式): ml/saved_models/naive_bayes_20250328_150603.pkl, 实际模型类型: MultinomialNB
+INFO:root:naive_bayes 模型加载完成
+INFO:root:正在加载 svm 模型...
+INFO:root:加载保存的模型: ml/saved_models/svm_20250328_150413.pkl
+INFO:root:尝试加载保存的传统机器学习模型: ml/saved_models/svm_20250328_150413.pkl
+INFO:root:成功加载传统机器学习模型(字典格式): ml/saved_models/svm_20250328_150413.pkl, 实际模型类型: SVC
+INFO:root:svm 模型加载完成
+INFO:root:正在加载 lstm 模型...
+INFO:root:lstm 模型未找到已训练的版本，需要先训练
+INFO:root:正在加载 residual_attention_lstm 模型...
+INFO:root:residual_attention_lstm 模型未找到已训练的版本，需要先训练
+INFO:root:数据库中已存在数据集记录，跳过初始化
+INFO:root:正在加载 naive_bayes 模型...
+INFO:root:加载保存的模型: ml/saved_models/naive_bayes_20250328_150603.pkl
+INFO:root:naive_bayes 模型加载完成
+INFO:root:正在加载 svm 模型...
+INFO:root:加载保存的模型: ml/saved_models/svm_20250328_150413.pkl
+INFO:root:svm 模型加载完成
+INFO:root:正在加载 lstm 模型...
+INFO:root:lstm 模型未找到已训练的版本，需要先训练
+INFO:root:正在加载 residual_attention_lstm 模型...
+INFO:root:residual_attention_lstm 模型未找到已训练的版本，需要先训练
+[2025-03-28 15:21:28 +0000] [4384] [INFO] Handling signal: winch
+[2025-03-28 15:21:28 +0000] [4384] [INFO] Handling signal: winch
+[2025-03-28 15:21:28 +0000] [4384] [INFO] Handling signal: winch
+[2025-03-28 15:21:29 +0000] [4384] [INFO] Handling signal: winch
+INFO:root:尝试加载模型: ml/saved_models/svm_20250328_150413.pkl
+INFO:root:模型 svm 已成功加载: ml/saved_models/svm_20250328_150413.pkl
+INFO:root:成功读取CSV文件，列名: ['Message', 'Label']
+INFO:root:使用用户指定的文本列: Message
+INFO:root:使用用户指定的标签列: Label
+Building prefix dict from the default dictionary ...
+DEBUG:jieba:Building prefix dict from the default dictionary ...
+Loading model from cache /tmp/jieba.cache
+DEBUG:jieba:Loading model from cache /tmp/jieba.cache
+Loading model cost 0.699 seconds.
+DEBUG:jieba:Loading model cost 0.699 seconds.
+Prefix dict has been built successfully.
+DEBUG:jieba:Prefix dict has been built successfully.
+INFO:root:已加载 144 条数据，其中垃圾短信 72 条
+INFO:root:初始化带有残差连接的注意力LSTM模型完成
+INFO:root:开始训练模型 residual_attention_lstm, 数据量: 144, 轮数: 10
+INFO:root:开始训练模型 residual_attention_lstm, 数据量: 144, 轮数: 10
+INFO:root:Epoch 1/10, Loss: 0.7481
+INFO:root:Evaluation - Accuracy: 0.4483, Precision: 0.4483, Recall: 1.0000, F1: 0.6190
+INFO:root:Epoch 2/10, Loss: 0.7251
+/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/sklearn/metrics/_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 due to no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+INFO:root:Evaluation - Accuracy: 0.5517, Precision: 0.0000, Recall: 0.0000, F1: 0.0000
+INFO:root:Epoch 3/10, Loss: 0.7527
+/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/sklearn/metrics/_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 due to no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+INFO:root:Evaluation - Accuracy: 0.5517, Precision: 0.0000, Recall: 0.0000, F1: 0.0000
+[2025-03-28 15:22:49 +0000] [4384] [CRITICAL] WORKER TIMEOUT (pid:4395)
+[2025-03-28 15:22:49 +0000] [4395] [ERROR] Error handling request /train_model
+Traceback (most recent call last):
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/gunicorn/workers/sync.py", line 134, in handle
+    self.handle_request(listener, req, client, addr)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/gunicorn/workers/sync.py", line 177, in handle_request
+    respiter = self.wsgi(environ, resp.start_response)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/flask/app.py", line 1536, in __call__
+    return self.wsgi_app(environ, start_response)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/flask/app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/flask/app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/flask/app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/app.py", line 904, in train_model_endpoint
+    trained_model, metrics = training.train_model(
+                             ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/ml/training.py", line 320, in train_model
+    outputs = model(batch_features)
+              ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1739, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1750, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/ml/model.py", line 112, in forward
+    lstm1_out, _ = self.lstm1(embedded)
+                   ^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1739, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1750, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/torch/nn/modules/rnn.py", line 1124, in forward
+    result = _VF.lstm(
+             ^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/gunicorn/workers/base.py", line 204, in handle_abort
+    sys.exit(1)
+SystemExit: 1
+[2025-03-28 15:22:49 +0000] [4395] [INFO] Worker exiting (pid: 4395)
+[2025-03-28 15:22:50 +0000] [4384] [ERROR] Worker (pid:4395) was sent SIGKILL! Perhaps out of memory?
+[2025-03-28 15:22:50 +0000] [4416] [INFO] Booting worker with pid: 4416

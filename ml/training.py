@@ -53,8 +53,52 @@ def load_data(filepath, text_column='', label_column=''):
         labels: 标签向量
     """
     try:
-        # 读取CSV文件
-        df = pd.read_csv(filepath)
+        # 尝试以不同方式读取CSV文件
+        try:
+            # 首先尝试标准格式读取
+            df = pd.read_csv(filepath)
+        except Exception as e1:
+            try:
+                # 如果失败，尝试使用不同的分隔符
+                df = pd.read_csv(filepath, sep='\t')
+            except Exception as e2:
+                try:
+                    # 尝试使用增强的CSV解析选项
+                    df = pd.read_csv(filepath, sep=',', quotechar='"', escapechar='\\', 
+                                     encoding='utf-8', on_bad_lines='skip', encoding_errors='replace')
+                except Exception as e3:
+                    logging.error(f"所有CSV解析方法都失败: {str(e1)}, {str(e2)}, {str(e3)}")
+                    # 最后尝试手动解析
+                    with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
+                        lines = f.readlines()
+                        
+                    # 检查第一行是否是列名
+                    if len(lines) > 0:
+                        header = lines[0].strip().split(',')
+                        if len(header) >= 2:  # 至少需要两列
+                            data = []
+                            for line in lines[1:]:  # 跳过标题行
+                                items = line.strip().split(',')
+                                if len(items) >= 2:  # 确保有足够的列
+                                    # 如果文本字段有引号，去掉引号
+                                    message = items[0]
+                                    if message.startswith('"') and message.endswith('"'):
+                                        message = message[1:-1]
+                                    
+                                    # 确保标签是0或1的格式
+                                    label = items[-1]
+                                    if label.startswith('"') and label.endswith('"'):
+                                        label = label[1:-1]
+                                    
+                                    data.append([message, label])
+                            
+                            # 创建DataFrame
+                            df = pd.DataFrame(data, columns=['Message', 'Label'])
+                        else:
+                            raise ValueError("CSV文件格式无效：需要至少两列")
+                    else:
+                        raise ValueError("CSV文件为空")
+        
         logging.info(f"成功读取CSV文件，列名: {df.columns.tolist()}")
         
         # 判断数据格式并获取文本列和标签列

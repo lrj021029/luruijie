@@ -210,40 +210,8 @@
     margin-right: 0.5rem;
 }
 
-.badge-ensemble {
-    background-color: #ff6b6b;
-    color: white;
-}
-
-.badge-roberta {
-    background-color: #8884d8;
-}
-
 .badge-lstm {
     background-color: #82ca9d;
-}
-
-.badge-bert {
-    background-color: #8dd1e1;
-}
-
-.badge-cnn {
-    background-color: #a4de6c;
-}
-
-.badge-xlnet {
-    background-color: #9775fa;
-    color: white;
-}
-
-.badge-gpt {
-    background-color: #748ffc;
-    color: white;
-}
-
-.badge-attention_lstm {
-    background-color: #4bc0c0;
-    color: white;
 }
 
 .badge-svm {
@@ -252,6 +220,11 @@
 
 .badge-naive_bayes {
     background-color: #ffc658;
+}
+
+.badge-residual_attention_lstm {
+    background-color: #4bc0c0;
+    color: white;
 }
 
 /* 动画效果 */

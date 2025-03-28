@@ -1244,75 +1244,142 @@ async function loadModelMetrics(forceReload = false) {
 
 // 渲染模型指标图表
 function renderModelMetricsChart(container, data) {
-    // 提取数据
-    const models = Object.keys(data);
+    // 转换模型类型显示名称
+    const modelDisplayNames = {
+        'naive_bayes': '朴素贝叶斯',
+        'svm': 'SVM',
+        'lstm': 'LSTM',
+        'residual_attention_lstm': 'ResidAttn LSTM'
+    };
+
+    // 提取数据，仅保留我们关注的四个模型
+    const models = Object.keys(data).filter(model => 
+        ['naive_bayes', 'svm', 'lstm', 'residual_attention_lstm'].includes(model));
+    
+    // 显示友好的模型名称
+    const modelLabels = models.map(model => modelDisplayNames[model] || model);
+    
+    // 指标和指标名称
     const metrics = ['accuracy', 'precision', 'recall', 'f1_score'];
     const metricNames = ['准确率', '精确率', '召回率', 'F1分数'];
     
-    // 设置图表数据
-    const chartData = {
-        labels: models,
-        datasets: metrics.map((metric, index) => {
-            return {
-                label: metricNames[index],
-                data: models.map(model => data[model][metric]),
-                backgroundColor: [
-                    'rgba(255, 99, 132, 0.7)',
-                    'rgba(54, 162, 235, 0.7)',
-                    'rgba(255, 206, 86, 0.7)',
-                    'rgba(75, 192, 192, 0.7)'
-                ][index],
-                borderColor: [
-                    'rgba(255, 99, 132, 1)',
-                    'rgba(54, 162, 235, 1)',
-                    'rgba(255, 206, 86, 1)',
-                    'rgba(75, 192, 192, 1)'
-                ][index],
-                borderWidth: 1
-            };
-        })
-    };
+    // 为每个指标创建一个图表
+    // 使用图表容器作为父容器
+    container.innerHTML = '<h6 class="text-center mb-4">模型性能指标对比</h6>';
     
-    // 创建canvas元素
-    container.innerHTML = '';
-    const canvas = document.createElement('canvas');
-    container.appendChild(canvas);
+    // 创建一个包含所有图表的容器
+    const chartsContainer = document.createElement('div');
+    chartsContainer.className = 'row';
+    container.appendChild(chartsContainer);
     
-    // 渲染图表
-    new Chart(canvas, {
-        type: 'bar',
-        data: chartData,
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    position: 'top',
-                },
-                title: {
-                    display: true,
-                    text: '各模型性能指标对比'
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return `${context.dataset.label}: ${(context.raw * 100).toFixed(1)}%`;
+    // 为每个指标创建一个图表
+    metrics.forEach((metric, index) => {
+        // 创建列和图表容器
+        const colDiv = document.createElement('div');
+        colDiv.className = 'col-md-6 mb-4';
+        chartsContainer.appendChild(colDiv);
+        
+        const chartContainer = document.createElement('div');
+        chartContainer.style.height = '250px';
+        colDiv.appendChild(chartContainer);
+        
+        const canvas = document.createElement('canvas');
+        chartContainer.appendChild(canvas);
+        
+        // 获取此指标的所有模型数据
+        const metricData = models.map(model => data[model][metric]);
+        
+        // 根据指标选择不同颜色
+        const colors = {
+            'accuracy': ['rgba(75, 192, 192, 0.7)', 'rgba(75, 192, 192, 1)'],
+            'precision': ['rgba(54, 162, 235, 0.7)', 'rgba(54, 162, 235, 1)'],
+            'recall': ['rgba(255, 206, 86, 0.7)', 'rgba(255, 206, 86, 1)'],
+            'f1_score': ['rgba(255, 99, 132, 0.7)', 'rgba(255, 99, 132, 1)']
+        };
+        
+        // 创建图表
+        new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: modelLabels,
+                datasets: [{
+                    label: metricNames[index],
+                    data: metricData,
+                    backgroundColor: colors[metric][0],
+                    borderColor: colors[metric][1],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    title: {
+                        display: true,
+                        text: metricNames[index]
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `${metricNames[index]}: ${(context.raw * 100).toFixed(1)}%`;
+                            }
                         }
                     }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 1,
-                    ticks: {
-                        callback: function(value) {
-                            return (value * 100) + '%';
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 1,
+                        ticks: {
+                            callback: function(value) {
+                                return (value * 100) + '%';
+                            }
                         }
                     }
                 }
             }
-        }
+        });
     });
+    
+    // 添加一个模型计数表格
+    const countTableDiv = document.createElement('div'); 
+    countTableDiv.className = 'mt-3';
+    container.appendChild(countTableDiv);
+    
+    // 创建表格HTML
+    let tableHTML = `
+    <div class="table-responsive">
+        <table class="table table-sm table-bordered">
+            <thead>
+                <tr>
+                    <th>模型</th>
+                    <th class="text-center">已处理数据量</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    // 添加每个模型的数据计数
+    models.forEach(model => {
+        const count = data[model].count || 0;
+        tableHTML += `
+            <tr>
+                <td>${modelDisplayNames[model] || model}</td>
+                <td class="text-center">${count}</td>
+            </tr>
+        `;
+    });
+    
+    tableHTML += `
+            </tbody>
+        </table>
+    </div>
+    `;
+    
+    countTableDiv.innerHTML = tableHTML;
     
     // 创建模型数据表格
     const tableContainer = document.createElement('div');

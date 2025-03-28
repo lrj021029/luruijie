@@ -188,15 +188,10 @@
                     <div class="mb-3">
                         <label for="training-model-type" class="form-label">选择模型类型</label>
                         <select class="form-select" id="training-model-select" name="model_type">
-                            <option value="roberta">RoBERTa (Transformer类)</option>
-                            <option value="bert">BERT (Transformer类)</option>
-                            <option value="lstm">LSTM (循环神经网络)</option>
-                            <option value="cnn">CNN (卷积神经网络)</option>
-                            <option value="xlnet">XLNet (Transformer类)</option>
-                            <option value="gpt">GPT (Transformer类)</option>
-                            <option value="attention_lstm">Attention LSTM (带注意力机制)</option>
-                            <option value="svm">SVM (传统机器学习)</option>
                             <option value="naive_bayes">朴素贝叶斯 (传统机器学习)</option>
+                            <option value="svm">SVM (传统机器学习)</option>
+                            <option value="lstm">LSTM (循环神经网络)</option>
+                            <option value="residual_attention_lstm">ResidualAttention LSTM (带残差连接的注意力机制)</option>
                         </select>
                     </div>
                     
@@ -331,13 +326,52 @@
         <div class="accordion" id="modelAccordion">
             <div class="accordion-item">
                 <h2 class="accordion-header">
-                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseEnsemble">
-                        <span class="model-badge badge-ensemble">Ensemble</span> 模型说明
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseNaiveBayes">
+                        <span class="model-badge badge-naive_bayes">Naive Bayes</span> 模型说明
                     </button>
                 </h2>
-                <div id="collapseEnsemble" class="accordion-collapse collapse" data-bs-parent="#modelAccordion">
+                <div id="collapseNaiveBayes" class="accordion-collapse collapse" data-bs-parent="#modelAccordion">
                     <div class="accordion-body">
-                        <p><strong>Attention Ensemble</strong> (注意力集成学习) 是一种高级的模型组合方法，它使用注意力机制动态地为不同模型的预测结果分配权重。与简单的投票或平均集成不同，它能够针对不同类型的短信内容，自适应地调整各个子模型的重要性。</p>
+                        <p><strong>朴素贝叶斯</strong>是一种基于贝叶斯定理的概率分类算法，它假设特征之间相互独立。朴素贝叶斯模型在文本分类任务中表现良好，特别是当数据集较小或特征数量很大时。这种模型计算效率高，训练速度快，适合于初步过滤垃圾短信。</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="accordion-item">
+                <h2 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSVM">
+                        <span class="model-badge badge-svm">SVM</span> 模型说明
+                    </button>
+                </h2>
+                <div id="collapseSVM" class="accordion-collapse collapse" data-bs-parent="#modelAccordion">
+                    <div class="accordion-body">
+                        <p><strong>支持向量机 (SVM)</strong> 是一种强大的传统机器学习算法，它通过在特征空间中找到最佳分隔超平面来分类数据。SVM对噪声有较好的容忍度，尤其适合处理高维特征空间（如文本数据），能够捕获垃圾短信与正常短信之间的微妙差别。</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="accordion-item">
+                <h2 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseLSTM">
+                        <span class="model-badge badge-lstm">LSTM</span> 模型说明
+                    </button>
+                </h2>
+                <div id="collapseLSTM" class="accordion-collapse collapse" data-bs-parent="#modelAccordion">
+                    <div class="accordion-body">
+                        <p><strong>LSTM (长短期记忆网络)</strong> 是一种特殊的循环神经网络 (RNN)，能够学习序列数据中的长期依赖关系。LSTM模型在处理文本数据时非常有效，因为它可以捕获词语之间的顺序关系和上下文信息，这对于理解短信的含义和意图至关重要。LSTM能够学习复杂的语言模式，适合检测隐蔽的垃圾短信。</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="accordion-item">
+                <h2 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseResidualAttentionLSTM">
+                        <span class="model-badge badge-residual_attention_lstm">ResidualAttention LSTM</span> 模型说明
+                    </button>
+                </h2>
+                <div id="collapseResidualAttentionLSTM" class="accordion-collapse collapse" data-bs-parent="#modelAccordion">
+                    <div class="accordion-body">
+                        <p><strong>带残差连接的注意力LSTM模型</strong>结合了三种强大的深度学习技术：LSTM网络、注意力机制和残差连接。这种模型架构允许信息在深层网络中更有效地流动，大幅缓解梯度消失问题。残差连接使网络能够学习身份映射和细微差异，而注意力机制能够识别短信中最重要的部分，更好地理解上下文。这种组合使得模型在处理复杂的垃圾短信分类任务时表现出色，特别是对于复杂、多样的短信内容。</p>
                     </div>
                 </div>
             </div>

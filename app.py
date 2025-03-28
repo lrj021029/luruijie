@@ -135,7 +135,8 @@ from models import SMSMessage, Dataset
 # 初始化机器学习模型
 models = {}
 tokenizers = {}
-model_types = ["ensemble", "roberta", "lstm", "bert", "cnn", "xlnet", "gpt", "attention_lstm", "svm", "naive_bayes"]
+# 仅保留四种模型：Naive Bayes, SVM, LSTM和新的ResidualAttention LSTM
+model_types = ["naive_bayes", "svm", "lstm", "residual_attention_lstm"]
 
 def load_models():
     """加载所有已训练的机器学习模型"""

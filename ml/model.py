@@ -194,6 +194,81 @@ class AttentionLSTM(nn.Module):
         
         return prediction
 
+class ResidualAttentionLSTM(nn.Module):
+    """带有残差连接和注意力机制的LSTM垃圾短信分类器"""
+    def __init__(self, vocab_size=10000, embedding_dim=300, hidden_dim=128, n_layers=2, dropout=0.2):
+        super(ResidualAttentionLSTM, self).__init__()
+        self.embedding = nn.Embedding(vocab_size, embedding_dim)
+        
+        # 主LSTM层
+        self.lstm1 = nn.LSTM(
+            embedding_dim,
+            hidden_dim,
+            num_layers=1,
+            batch_first=True,
+            bidirectional=True
+        )
+        
+        # 残差LSTM层
+        self.lstm2 = nn.LSTM(
+            hidden_dim*2,
+            hidden_dim,
+            num_layers=1,
+            batch_first=True,
+            bidirectional=True
+        )
+        
+        # 注意力层参数
+        self.attention = nn.Linear(hidden_dim * 2, 1)
+        
+        # 全连接层
+        self.fc1 = nn.Linear(hidden_dim * 2, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, 1)
+        
+        # Dropout正则化
+        self.dropout = nn.Dropout(dropout)
+        
+        # Layer Normalization
+        self.layer_norm1 = nn.LayerNorm(hidden_dim * 2)
+        self.layer_norm2 = nn.LayerNorm(hidden_dim * 2)
+        
+    def attention_mechanism(self, lstm_output):
+        """自注意力机制，计算不同时间步的重要性"""
+        # lstm_output形状: [batch_size, seq_len, hidden_dim*2]
+        
+        # 计算注意力分数和权重
+        attn_weights = F.softmax(self.attention(lstm_output), dim=1)
+        
+        # 加权求和得到上下文向量
+        context = torch.sum(lstm_output * attn_weights, dim=1)  # [batch_size, hidden_dim*2]
+        return context, attn_weights
+        
+    def forward(self, x):
+        # x形状: [batch_size, seq_len]
+        embedded = self.dropout(self.embedding(x))
+        # embedded形状: [batch_size, seq_len, embedding_dim]
+        
+        # 第一个LSTM层
+        lstm1_out, _ = self.lstm1(embedded)
+        # 应用Layer Normalization
+        norm_lstm1_out = self.layer_norm1(lstm1_out)
+        
+        # 第二个LSTM层 (残差连接)
+        lstm2_out, _ = self.lstm2(norm_lstm1_out)
+        # 残差连接: 将第一层输出与第二层输出相加
+        residual_out = lstm2_out + norm_lstm1_out
+        # 应用Layer Normalization
+        norm_residual_out = self.layer_norm2(residual_out)
+        
+        # 应用注意力机制获取上下文向量
+        context, _ = self.attention_mechanism(norm_residual_out)
+        
+        # 全连接层
+        output = F.relu(self.fc1(self.dropout(context)))
+        output = self.fc2(self.dropout(output))
+        
+        return output
+
 class EnsembleAttentionModel(nn.Module):
     """基于注意力机制的集成学习模型，动态合并多个子模型的结果"""
     def __init__(self, input_dim=768, hidden_dim=128, dropout=0.1):
@@ -288,39 +363,15 @@ def load_model(model_type, model_path=None):
     
     try:
         # 初始化模型
-        if model_type == 'roberta':
-            # 初始化RoBERTa分类器
-            model = SpamClassifier(input_dim=770)  # 768 + 2 (元数据特征)
-            tokenizer = None  # 使用jieba分词
-        elif model_type == 'bert':
-            # 初始化BERT分类器
-            model = BERTClassifier()
-            tokenizer = None  # 使用jieba分词
-        elif model_type == 'xlnet':
-            # 初始化XLNet分类器
-            model = XLNetClassifier()
-            tokenizer = None  # 使用jieba分词
-        elif model_type == 'gpt':
-            # 初始化GPT分类器
-            model = GPTClassifier()
-            tokenizer = None  # 使用jieba分词
-        elif model_type == 'lstm':
+        if model_type == 'lstm':
             # 初始化LSTM模型
             model = SMSLSTM()
             tokenizer = None  # 使用jieba分词
-        elif model_type == 'attention_lstm':
-            # 初始化带注意力机制的LSTM模型
-            model = AttentionLSTM()
+        elif model_type == 'residual_attention_lstm':
+            # 初始化带有残差连接的注意力LSTM模型
+            model = ResidualAttentionLSTM()
             tokenizer = None  # 使用jieba分词
-        elif model_type == 'cnn':
-            # 初始化CNN模型
-            model = SMSCNN()
-            tokenizer = None  # 使用jieba分词
-        elif model_type == 'ensemble':
-            # 初始化基于注意力机制的集成学习模型
-            model = EnsembleAttentionModel(input_dim=770)  # 与单个模型一致
-            tokenizer = None  # 使用jieba分词
-            logging.info("初始化集成学习模型完成")
+            logging.info("初始化带有残差连接的注意力LSTM模型完成")
         elif model_type == 'svm' or model_type == 'naive_bayes':
             # 传统机器学习模型
             # 创建一个简单的替代模型，避免None引起的错误
@@ -687,11 +738,11 @@ def predict(model, features, model_type):
                 # 如果预测失败，使用规则和随机预测
                 model_spam_score = np.random.uniform(0.3, 0.7)
         
-        # 深度学习模型和集成模型（需要PyTorch）
+        # 深度学习模型（需要PyTorch）
         elif HAS_TORCH and model is not None:
             try:
                 # 深度学习模型预测
-                if model_type in ['roberta', 'bert', 'lstm', 'cnn', 'xlnet', 'gpt', 'attention_lstm']:
+                if model_type in ['lstm', 'residual_attention_lstm']:
                     model.eval()
                     with torch.no_grad():
                         # 将特征转换为张量
@@ -700,32 +751,6 @@ def predict(model, features, model_type):
                         # 获取sigmoid输出作为置信度
                         model_spam_score = torch.sigmoid(output).item()
                         logging.info(f"深度学习模型预测成功: {model_type}, 分数: {model_spam_score:.4f}")
-                
-                # 集成模型预测
-                elif model_type == 'ensemble':
-                    model.eval()
-                    with torch.no_grad():
-                        # 使用当前特征向量作为默认
-                        features_tensor = torch.FloatTensor(features).unsqueeze(0)
-                        
-                        # 构建特征字典
-                        features_dict = {
-                            'roberta': features_tensor,
-                            'lstm': features_tensor,
-                            'bert': features_tensor,
-                            'cnn': features_tensor,
-                            'xlnet': features_tensor,
-                            'gpt': features_tensor,
-                            'attention_lstm': features_tensor
-                        }
-                        
-                        # 调用集成模型
-                        output, weights = model(features_dict)
-                        model_spam_score = torch.sigmoid(output).item()
-                        
-                        # 记录各子模型的贡献权重
-                        logging.debug(f"集成模型权重: {weights}")
-                        logging.info(f"集成模型预测成功: 分数: {model_spam_score:.4f}")
             except Exception as model_error:
                 logging.error(f"模型预测错误: {str(model_error)}")
                 logging.error(traceback.format_exc())
@@ -743,11 +768,11 @@ def predict(model, features, model_type):
             model_weight = 0.5
             rule_weight = 0.5
             logging.info(f"使用传统机器学习模型权重: 模型={model_weight}, 规则={rule_weight}")
-        elif model is not None and model_type in ['roberta', 'bert', 'xlnet', 'gpt']:
-            # 高级深度学习模型：70%模型 + 30%规则
+        elif model is not None and model_type in ['lstm', 'residual_attention_lstm']:
+            # 深度学习模型：70%模型 + 30%规则
             model_weight = 0.7
             rule_weight = 0.3
-            logging.info(f"使用高级深度学习模型权重: 模型={model_weight}, 规则={rule_weight}")
+            logging.info(f"使用深度学习模型权重: 模型={model_weight}, 规则={rule_weight}")
         else:
             # 默认或其他模型：40%模型 + 60%规则
             model_weight = 0.4

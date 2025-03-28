@@ -11,7 +11,7 @@ import os
 import traceback
 from ml.preprocessing import clean_text
 from ml.feature_extraction import extract_features
-from ml.model import SpamClassifier, SMSLSTM, SMSCNN
+from ml.model import SMSLSTM, ResidualAttentionLSTM
 
 # 设置日志级别
 logging.basicConfig(level=logging.DEBUG)
@@ -28,20 +28,15 @@ class SMSDataset(Dataset):
     
     def __getitem__(self, idx):
         # 根据不同的模型类型返回不同类型的张量
-        if self.model_type in ['lstm', 'attention_lstm', 'cnn']:
+        if self.model_type in ['lstm', 'residual_attention_lstm']:
             # 基于嵌入的模型需要整数型索引
             feature = torch.tensor(self.features[idx], dtype=torch.long)
         else:
             # 其他模型使用浮点型特征
             feature = torch.FloatTensor(self.features[idx])
             
-        # 根据模型类型决定标签的数据类型
-        if self.model_type in ['roberta', 'bert', 'xlnet', 'gpt']:
-            # 这些模型使用BCE损失，需要浮点型标签
-            label = torch.tensor(float(self.labels[idx]), dtype=torch.float)
-        else:
-            # 其他模型可能使用交叉熵损失，需要长整型标签
-            label = torch.tensor(int(self.labels[idx]), dtype=torch.long)
+        # 所有模型使用交叉熵损失，需要长整型标签
+        label = torch.tensor(int(self.labels[idx]), dtype=torch.long)
         return feature, label
 
 def load_data(filepath, text_column='', label_column=''):
@@ -434,10 +429,10 @@ def cross_validate(model_class, features, labels, model_type, n_folds=5, epochs=
             y_train, y_test = labels[train_idx], labels[test_idx]
             
             # 创建模型实例
-            if model_type in ['roberta', 'bert']:
-                model = model_class(input_dim=770)  # 768 + 2 (元数据特征)
+            if model_type in ['naive_bayes', 'svm']:
+                model = model_class()  # 传统模型
             else:
-                model = model_class()  # LSTM或CNN模型
+                model = model_class()  # LSTM或ResidualAttentionLSTM模型
             
             # 创建数据集和加载器，传入模型类型以处理正确的张量类型
             train_dataset = SMSDataset(X_train, y_train, model_type)

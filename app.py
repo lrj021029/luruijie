@@ -841,6 +841,36 @@ def train_model_endpoint():
         # 获取数据源类型
         data_source = request.form.get('data_source', 'upload')
         
+        # 获取向量化选项（仅对传统机器学习模型有效）
+        vectorizer_type = request.form.get('vectorizer', 'tfidf')  # tfidf 或 count
+        max_features = request.form.get('max_features', '20000')  # 最大特征数量
+        ngram_range = request.form.get('ngram_range', '1,2')  # n-gram范围，格式为"min,max"
+        min_df = request.form.get('min_df', '2')  # 最小文档频率
+        use_stop_words = request.form.get('use_stop_words', 'false')  # 是否使用停用词
+        
+        # 解析向量化参数
+        try:
+            max_features = int(max_features)
+            ngram_min, ngram_max = map(int, ngram_range.split(','))
+            ngram_range = (ngram_min, ngram_max)
+            min_df = int(min_df)
+            use_stop_words = use_stop_words.lower() == 'true'
+        except ValueError:
+            # 如果解析失败，使用默认值
+            max_features = 20000
+            ngram_range = (1, 2)
+            min_df = 2
+            use_stop_words = False
+        
+        # 创建向量化配置字典
+        vectorization_config = {
+            'method': vectorizer_type,
+            'max_features': max_features,
+            'ngram_range': ngram_range,
+            'min_df': min_df,
+            'use_stop_words': use_stop_words
+        }
+        
         # 验证模型类型是否有效
         if model_type not in model_types:
             return jsonify({'error': f'无效的模型类型: {model_type}'}), 400
@@ -948,16 +978,32 @@ def train_model_endpoint():
         
         # 开始训练
         logging.info(f"开始训练模型 {model_type}, 数据量: {len(features)}, 轮数: {epochs}")
-        trained_model, metrics = training.train_model(
-            model, 
-            features, 
-            labels, 
-            model_type, 
-            model_save_path,
-            epochs=epochs,
-            batch_size=batch_size,
-            learning_rate=learning_rate
-        )
+        
+        # 仅为传统机器学习模型传递向量化配置
+        if model_type in ['svm', 'naive_bayes']:
+            trained_model, metrics, vectorization_info = training.train_model(
+                model, 
+                features, 
+                labels, 
+                model_type, 
+                model_save_path,
+                epochs=epochs,
+                batch_size=batch_size,
+                learning_rate=learning_rate,
+                vectorization_config=vectorization_config
+            )
+        else:
+            trained_model, metrics = training.train_model(
+                model, 
+                features, 
+                labels, 
+                model_type, 
+                model_save_path,
+                epochs=epochs,
+                batch_size=batch_size,
+                learning_rate=learning_rate
+            )
+            vectorization_info = None
         
         # 如果是上传的文件，删除临时文件（如果是数据集文件则不删除）
         if data_source == 'upload':
@@ -968,15 +1014,22 @@ def train_model_endpoint():
             models[model_type] = trained_model
             logging.info(f"训练完成，已更新全局模型缓存")
         
-        # 返回训练结果
-        return jsonify({
+        # 准备响应数据
+        response_data = {
             'success': True,
             'model_type': model_type,
             'model_path': model_save_path,
             'data_size': len(features),
             'metrics': metrics,
             'timestamp': timestamp
-        })
+        }
+        
+        # 如果有向量化信息，添加到响应中
+        if vectorization_info:
+            response_data['vectorization'] = vectorization_info
+        
+        # 返回训练结果
+        return jsonify(response_data)
             
     except Exception as e:
         logging.error(f"训练模型错误: {str(e)}")

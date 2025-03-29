@@ -9,6 +9,7 @@ import logging
 import pandas as pd
 import os
 import traceback
+from ml import preprocessing
 from ml.preprocessing import clean_text
 from ml.feature_extraction import extract_features
 from ml.model import SMSLSTM, ResidualAttentionLSTM
@@ -228,7 +229,7 @@ def load_data(filepath, text_column='', label_column=''):
         logging.exception("详细错误信息:")
         return None, None
 
-def train_model(model, features, labels, model_type, model_save_path, epochs=10, batch_size=8, learning_rate=0.001):
+def train_model(model, features, labels, model_type, model_save_path, epochs=10, batch_size=8, learning_rate=0.001, vectorization_config=None):
     """
     训练模型
     
@@ -241,10 +242,12 @@ def train_model(model, features, labels, model_type, model_save_path, epochs=10,
         epochs: 训练轮数
         batch_size: 批次大小
         learning_rate: 学习率
+        vectorization_config: 向量化配置（对于传统机器学习模型）
     
     返回:
         model: 训练好的模型
         metrics: 评估指标
+        vectorization_info: 向量化信息（仅对于传统机器学习模型）
     """
     try:
         logging.info(f"开始训练模型 {model_type}, 数据量: {len(features)}, 轮数: {epochs}")
@@ -259,19 +262,83 @@ def train_model(model, features, labels, model_type, model_save_path, epochs=10,
                 
                 # 预处理文本特征
                 if isinstance(features[0], str):
-                    # 提取TF-IDF特征，对英文和中文词汇都有良好识别
-                    vectorizer = TfidfVectorizer(max_features=5000, 
-                                               min_df=3,  # 至少出现3次的词才考虑
-                                               ngram_range=(1, 2))  # 同时考虑单个词和两个词的组合
+                    # 根据配置确定向量化参数
+                    if vectorization_config:
+                        # 使用用户提供的配置
+                        method = vectorization_config.get('method', 'tfidf')
+                        max_features = vectorization_config.get('max_features', 20000)
+                        ngram_range = vectorization_config.get('ngram_range', (1, 2))
+                        min_df = vectorization_config.get('min_df', 2)
+                        use_stop_words = vectorization_config.get('use_stop_words', False)
+                        
+                        # 记录使用的配置
+                        logging.info(f"使用自定义向量化配置: 方法={method}, 最大特征数={max_features}, ngram范围={ngram_range}")
+                        
+                        # 创建向量器
+                        from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
+                        if method == 'tfidf':
+                            vectorizer = TfidfVectorizer(
+                                max_features=max_features,
+                                min_df=min_df,
+                                ngram_range=ngram_range,
+                                stop_words=preprocessing.get_stopwords() if use_stop_words else None,
+                                use_idf=True
+                            )
+                        else:  # 'count'
+                            vectorizer = CountVectorizer(
+                                max_features=max_features,
+                                min_df=min_df,
+                                ngram_range=ngram_range,
+                                stop_words=preprocessing.get_stopwords() if use_stop_words else None
+                            )
+                    else:
+                        # 使用默认配置
+                        vectorizer = TfidfVectorizer(
+                            max_features=5000, 
+                            min_df=3,
+                            ngram_range=(1, 2)
+                        )
+                    
+                    # 使用向量器转换文本
                     X = vectorizer.fit_transform(features)
                     logging.info(f"提取的特征维度: {X.shape}")
+                    
                     # 记录一些高权重特征词
                     feature_names = vectorizer.get_feature_names_out()
-                    if len(feature_names) > 0:
-                        logging.info(f"部分特征词示例: {feature_names[:20]}")
+                    
+                    # 准备向量化结果信息
+                    vectorization_info = {
+                        'method': 'tfidf' if isinstance(vectorizer, TfidfVectorizer) else 'count',
+                        'n_features': X.shape[1],
+                        'ngram_range': vectorizer.ngram_range,
+                        'min_df': vectorizer.min_df,
+                        'stop_words': vectorizer.stop_words is not None,
+                        'use_idf': getattr(vectorizer, 'use_idf', True)
+                    }
+                    
+                    # 尝试获取最重要的特征
+                    try:
+                        if isinstance(vectorizer, TfidfVectorizer):
+                            # 对于TF-IDF，我们可以查看各特征的IDF值
+                            feature_importance = vectorizer.idf_
+                        else:
+                            # 对于CountVectorizer，我们需要计算单词频率
+                            feature_importance = np.asarray(X.sum(axis=0)).flatten()
+                        
+                        # 获取前20个重要特征
+                        top_indices = np.argsort(feature_importance)[::-1][:20]
+                        top_features = [(feature_names[i], float(feature_importance[i])) for i in top_indices]
+                        vectorization_info['top_features'] = top_features
+                        
+                        if len(feature_names) > 0:
+                            logging.info(f"部分特征词示例: {feature_names[:20]}")
+                    except Exception as e:
+                        logging.error(f"获取特征重要性错误: {str(e)}")
                 else:
                     # 已经是向量特征，直接使用
                     X = np.array(features)
+                    # 没有向量化信息
+                    vectorization_info = None
                 
                 # 划分训练集和测试集
                 X_train, X_test, y_train, y_test = train_test_split(X, labels, test_size=0.2, random_state=42)
@@ -324,18 +391,25 @@ def train_model(model, features, labels, model_type, model_save_path, epochs=10,
                     'f1': float(f1)
                 }
                 
-                return clf, evaluation_metrics
+                return clf, evaluation_metrics, vectorization_info
                 
             except Exception as ml_error:
                 logging.error(f"传统机器学习模型训练失败: {str(ml_error)}")
                 logging.error(traceback.format_exc())
                 
-                # 使用默认的模拟指标
+                # 使用默认的模拟指标和向量化信息
                 return model, {
                     'accuracy': 0.8,
                     'precision': 0.8,
                     'recall': 0.8,
                     'f1': 0.8
+                }, {
+                    'method': 'tfidf',
+                    'n_features': 1000,
+                    'ngram_range': (1, 2),
+                    'min_df': 2,
+                    'stop_words': False,
+                    'use_idf': True
                 }
         
         # 对于深度学习模型，使用PyTorch进行训练
@@ -444,13 +518,28 @@ def train_model(model, features, labels, model_type, model_save_path, epochs=10,
         logging.error(f"训练模型错误: {str(e)}")
         logging.error(traceback.format_exc())
         
-        # 返回模拟指标
-        return model, {
-            'accuracy': 0.8,
-            'precision': 0.8,
-            'recall': 0.8,
-            'f1': 0.8
-        }
+        # 返回模拟指标和空的向量化信息
+        if model_type in ['svm', 'naive_bayes']:
+            return model, {
+                'accuracy': 0.8,
+                'precision': 0.8,
+                'recall': 0.8,
+                'f1': 0.8
+            }, {
+                'method': 'tfidf',
+                'n_features': 1000,
+                'ngram_range': (1, 2),
+                'min_df': 2,
+                'stop_words': False,
+                'use_idf': True
+            }
+        else:
+            return model, {
+                'accuracy': 0.8,
+                'precision': 0.8,
+                'recall': 0.8,
+                'f1': 0.8
+            }
 
 def cross_validate(model_class, features, labels, model_type, n_folds=5, epochs=5, batch_size=8, learning_rate=0.001):
     """

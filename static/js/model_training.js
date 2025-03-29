@@ -27,6 +27,11 @@ function setupModelTraining() {
     const trainingFileInput = document.getElementById('training-file');
     const datasetSelect = document.getElementById('dataset-select');
     
+    // 向量化选项相关元素
+    const vectorizationOptions = document.querySelector('.vectorization-options');
+    const vectorizationCollapse = document.getElementById('vectorizationOptions');
+    const modelTypeSelect = document.getElementById('training-model-select');
+    
     // 切换数据源选择
     dataSourceUpload.addEventListener('change', function() {
         if (this.checked) {
@@ -48,6 +53,43 @@ function setupModelTraining() {
             loadDatasetOptions();
         }
     });
+    
+    // 根据模型类型控制向量化选项的显示
+    function toggleVectorizationOptions() {
+        // 获取当前选择的模型类型
+        const selectedModelType = modelTypeSelect.value;
+        
+        // 只对传统机器学习模型显示向量化选项
+        if (selectedModelType === 'naive_bayes' || selectedModelType === 'svm') {
+            vectorizationOptions.style.display = 'block';
+            
+            // 根据模型类型调整某些默认值
+            if (selectedModelType === 'naive_bayes') {
+                // 朴素贝叶斯通常使用Count Vectorizer更好
+                document.getElementById('vectorizer').value = 'count';
+            } else if (selectedModelType === 'svm') {
+                // SVM通常使用TF-IDF更好
+                document.getElementById('vectorizer').value = 'tfidf';
+                // SVM通常需要更小的特征空间
+                document.getElementById('max-features').value = '10000';
+            }
+        } else {
+            // 对于深度学习模型，隐藏向量化选项
+            vectorizationOptions.style.display = 'none';
+            
+            // 折叠向量化选项面板（如果已展开）
+            const bsCollapse = bootstrap.Collapse.getInstance(vectorizationCollapse);
+            if (bsCollapse) {
+                bsCollapse.hide();
+            }
+        }
+    }
+    
+    // 初始时执行一次以设置初始状态
+    toggleVectorizationOptions();
+    
+    // 当模型选择变化时触发
+    modelTypeSelect.addEventListener('change', toggleVectorizationOptions);
     
     // 加载数据集选项
     async function loadDatasetOptions() {
@@ -196,6 +238,47 @@ function setupModelTraining() {
         trainResultDiv.querySelector('.alert-heading').innerHTML = '<i class="fas fa-check-circle me-2"></i>训练成功!';
         
         // 格式化指标数据
+        let vectorizationInfo = '';
+        
+        // 如果是传统机器学习模型，显示向量化信息
+        if (data.model_type === 'naive_bayes' || data.model_type === 'svm') {
+            // 检查是否有向量化数据
+            if (data.vectorization) {
+                const vctr = data.vectorization;
+                vectorizationInfo = `
+                    <div class="mt-3">
+                        <h6>向量化信息:</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <ul class="small">
+                                    <li>向量化方法: ${vctr.method === 'tfidf' ? 'TF-IDF' : 'Count Vectorizer'}</li>
+                                    <li>特征数: ${vctr.n_features || '未知'}</li>
+                                    <li>N-gram范围: ${vctr.ngram_range ? `(${vctr.ngram_range[0]}, ${vctr.ngram_range[1]})` : '未知'}</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <ul class="small">
+                                    <li>移除停用词: ${vctr.stop_words ? '是' : '否'}</li>
+                                    <li>最小文档频率: ${vctr.min_df || '默认'}</li>
+                                    <li>使用IDF加权: ${vctr.use_idf ? '是' : '否'}</li>
+                                </ul>
+                            </div>
+                        </div>
+                        ${vctr.top_features ? `
+                        <div class="mt-2">
+                            <h6>重要特征:</h6>
+                            <div class="small">
+                                ${vctr.top_features.map((feature, index) => 
+                                    `<span class="badge bg-${index < 5 ? 'primary' : 'secondary'} me-1 mb-1">${feature[0]} (${feature[1].toFixed(3)})</span>`
+                                ).join('')}
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+            }
+        }
+        
         const metricsHtml = `
             <p><strong>模型类型:</strong> ${data.model_type}</p>
             <p><strong>数据量:</strong> ${data.data_size} 条</p>
@@ -206,6 +289,7 @@ function setupModelTraining() {
                 <li>召回率 (Recall): ${(data.metrics.recall * 100).toFixed(2)}%</li>
                 <li>F1值: ${(data.metrics.f1 * 100).toFixed(2)}%</li>
             </ul>
+            ${vectorizationInfo}
             <p class="mb-0"><small>已保存模型: ${data.model_path}</small></p>
             
             <div class="mt-3 btn-group">
